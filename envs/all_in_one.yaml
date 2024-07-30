@@ -1,29 +1,29 @@
-name: rock_roi
+name: noname
 channels:
   - conda-forge
   - bioconda
   - nodefaults
 dependencies:
-  - conda-forge::icu=70.1
-  - bioconda::bedtools=2.31.1
-  - conda-forge::pandoc=2.9.2
-  - bioconda::subread=2.0.6
-  - bioconda::ucsc-bedgraphtobigwig=445
-  - bioconda::ucsc-fasize=377
-  - bioconda::htslib=1.17
-  - bioconda::samtools=1.18
-  - bioconda::star=2.7.11a
-  - conda-forge::r-base=4.2.2
-  - bioconda::bioconductor-biocgenerics=0.44.0
-  - conda-forge::r-biocmanager=1.30.22
-  - conda-forge::r-cairo=1.6_0
-  - conda-forge::r-mass=7.3_60
-  - conda-forge::r-matrixstats=1.1.0
-  - bioconda::bioconductor-biobase=2.58.0
-  - bioconda::bioconductor-sparsematrixstats=1.10.0
-  - bioconda::bioconductor-summarizedexperiment=1.28.0
-  - bioconda::bioconductor-singlecellexperiment=1.20.0
-  - bioconda::bioconductor-scuttle=1.8.0
-  - bioconda::bioconductor-scater=1.26.0
-  - conda-forge::r-seurat=4.4.0
-  - conda-forge::r-seuratobject=5.0.0
+  ## - conda-forge::icu=70.1
+  ## - bioconda::bedtools=2.31.1
+  ## - conda-forge::pandoc=2.9.2
+  ## - bioconda::subread=2.0.6
+  ## - bioconda::ucsc-bedgraphtobigwig=445
+  ## - bioconda::ucsc-fasize=377
+  - bioconda::htslib
+  - bioconda::samtools
+  - bioconda::star=2.7.11b
+  ## - conda-forge::r-base=4.2.2
+  ## - bioconda::bioconductor-biocgenerics=0.44.0
+  ## - conda-forge::r-biocmanager=1.30.22
+  ## - conda-forge::r-cairo=1.6_0
+  ## - conda-forge::r-mass=7.3_60
+  ## - conda-forge::r-matrixstats=1.1.0
+  ## - bioconda::bioconductor-biobase=2.58.0
+  ## - bioconda::bioconductor-sparsematrixstats=1.10.0
+  ## - bioconda::bioconductor-summarizedexperiment=1.28.0
+  ## - bioconda::bioconductor-singlecellexperiment=1.20.0
+  ## - bioconda::bioconductor-scuttle=1.8.0
+  ## - bioconda::bioconductor-scater=1.26.0
+  ## - conda-forge::r-seurat=4.4.0
+  ## - conda-forge::r-seuratobject=5.0.0
