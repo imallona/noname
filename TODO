@@ -1,4 +1,1 @@
-- (mark, high) coverage tracks: reduce the CB scope to filtered-in-after-proper-QC
-- (izaskun, moderate) add the expected cell number into the starsolo call
-- clearly document the threads/cores/max pertask features
-- add proper benchmark/resource tracking
+- everything
