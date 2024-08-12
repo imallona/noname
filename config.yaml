@@ -8,14 +8,17 @@ STAR: STAR
 repo_path: '.'
 
 ## run limits
-nthreads: 2
+nthreads: 50
 max_mem_mb: 20000 ## these are megabytes
+
+## cell filtering
+soloCellFilter: "EmptyDrops_CR"
 
 ## full or relative path to the `root` of the rock_roi_method cloned repository
 # rock_method_path: "."
 
-## full or relative path where outputs will be generated at
-working_dir: work
+## full, absolute path where outputs will be generated at
+working_dir: /home/imallona/src/noname/work
 
 # https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.primary_assembly.annotation.gtf.gz
 # caution uncompressed
@@ -29,6 +32,6 @@ sjdbOverhang: 61
 samples:
   - name: pbmc
     uses:
-      cb_umi_fq: data/325411_1-Unmod_WTA_S1_R1_001_downsampled.fastq.gz
-      cdna_fq: data/325411_1-Unmod_WTA_S1_R1_001_downsampled.fastq.gz
+      cb_umi_fq: data/325411_1-Unmod_WTA_S1_R1_001_downsampled_100M.fq.gz
+      cdna_fq:   data/325411_1-Unmod_WTA_S1_R2_001_downsampled_100M.fq.gz
       whitelist: 384x3

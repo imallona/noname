@@ -23,8 +23,11 @@ print(get_sample_names())
 
 rule all:
     input:
-        expand(op.join(config['working_dir'], 'align_wta', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-                       sample = get_sample_names())
+        # expand(op.join(config['working_dir'], 'align_wta', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+        #                sample = get_sample_names()),
+        # expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_sce.rds'),
+        #        sample = get_sample_names()),
+        op.join(config['working_dir'], 'align_wta', 'descriptive_report.html')
 
 rule index:
     conda:
@@ -101,7 +104,8 @@ rule align_wta:
         # num_cells = get_expected_cells_by_name("{sample}"),
         tmp = op.join(config['working_dir'], 'tmp_align_wta_{sample}'),
         maxmem = config['max_mem_mb'] * 1024 * 1024,
-        sjdbOverhang = config['sjdbOverhang']
+        sjdbOverhang = config['sjdbOverhang'],
+        soloCellFilter = config['soloCellFilter']
     shell:
         """
    rm -rf {params.tmp}
@@ -118,8 +122,8 @@ rule align_wta:
      --soloUMIposition 3_10_3_17 \
      --soloCBwhitelist {input.cb1} {input.cb2} {input.cb3} \
      --soloCBmatchWLtype 1MM \
-     --soloCellFilter EmptyDrops_CR \
-     # --outSAMattributes NH HI AS nM NM MD jM jI MC ch CB UB gx gn sS CR CY UR UY \
+     --soloCellFilter {params.soloCellFilter} \
+     --outSAMattributes NH HI AS nM NM MD jM jI MC ch CB UB gx gn sS CR CY UR UY \
      --soloCellReadStats Standard \
      --outSAMtype BAM SortedByCoordinate \
      --quantMode GeneCounts \
@@ -128,8 +132,6 @@ rule align_wta:
      --outTmpDir {params.tmp} \
      --sjdbOverhang {params.sjdbOverhang} \
      --limitBAMsortRAM {params.maxmem}
-
-    samtools index -@ {threads} {output.bam} 
 
     rm -rf {params.tmp}
         """
@@ -149,20 +151,23 @@ rule align_wta:
 #         {params.faSize} -detailed -tab {input.fa} > {output}
 #         """
 
-# rule index_bam:
-#     conda:
-#         op.join('envs', 'all_in_one.yaml')
-#     input:
-#         bam = op.join(config['working_dir'], 'align_{modality}', '{sample}', 'Aligned.sortedByCoord.out.bam')
-#     output:
-#         bai = op.join(config['working_dir'], 'align_{modality}', '{sample}',
-#                       'Aligned.sortedByCoord.out.bam.bai')
-#     threads: workflow.cores
-#     shell:
-#         """
-#         samtools index -@ {threads} {input.bam}     
-#         """
-        
+## TODO keep only if generating coverage tracks
+rule index_bam:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        bam = op.join(config['working_dir'], 'align_wta', '{sample}', 'Aligned.sortedByCoord.out.bam')
+    output:
+        bai = op.join(config['working_dir'], 'align_wta', '{sample}',
+                      'Aligned.sortedByCoord.out.bam.bai')
+    threads: workflow.cores
+    shell:
+        """
+        samtools index -@ {threads} {input.bam}     
+        """
+
+# rule generate_tracks:
+    
 ## yes the log is considered an output - to pass as a flag
 ## R_LIBS are conda's if run in conda, but /home/rock/R_LIBs if run in docker, and user's if run directly
 rule install_r_deps:
@@ -183,83 +188,60 @@ rule install_r_deps:
 
         {params.Rbin} -q --no-save --no-restore --slave \
              -f {input.script} &> {output.log}
-        """
+#         """
         
-# rule generate_sce:
-#     conda:
-#         op.join('envs', 'all_in_one.yaml')
-#     input:
-#         tso_fc = op.join(config['working_dir'], 'multimodal', '{sample}', 'tso_featurecounted'),
-#         wta_fc = op.join(config['working_dir'], 'multimodal', '{sample}', 'wta_featurecounted'),
-#         gtf = config['gtf'],
-#         script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
-#         installs = op.join(config['working_dir'], 'log', 'installs.log'),
-#         subset_gtf = op.join(config['working_dir'], 'multimodal', 'subset.gtf')
-#     output:
-#         sce = op.join(config['working_dir'], 'multimodal', '{sample}', '{sample}_sce.rds')
-#     params:
-#         multimodal_path = op.join(config['working_dir'], 'multimodal'),
-#         run_mode = config['run_mode'],
-#         working_dir = config['working_dir'],
-#         sample = "{wildcards.sample}",
-#         Rbin = config['Rbin']
-#     # run:
-#     #     if params.run_mode in ['all', 'tso ontarget multi']:
-#     #         shell ("""
-#     #         echo 'all or multi' > {output.sce}
-#     #         """)
-#     #     else:
-#     #         shell(" echo 'something else' > {output.sce}")
-#     shell:
-#         """
-#         mkdir -p {params.multimodal_path} 
-#         {params.Rbin} -q --no-save --no-restore --slave \
-#              -f {input.script} --args --sample {wildcards.sample} \
-#              --run_mode {params.run_mode} \
-#              --working_dir {params.working_dir} \
-#              --output_fn {output.sce} \
-#              --captured_gtf {input.subset_gtf}
-#         """
+rule generate_sce:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        wta_filtered = op.join(config['working_dir'], 'align_wta', '{sample}', 'Solo.out',
+                               'Gene', 'filtered', 'matrix.mtx'),
+        # gtf = config['gtf'],
+        script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
+        installs = op.join(config['working_dir'], 'log', 'installs.log')
+    output:
+        sce = op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_sce.rds')
+    params:
+        align_path = op.join(config['working_dir'], 'align_wta'),
+        working_dir = config['working_dir'],
+        sample = "{wildcards.sample}",
+        Rbin = config['Rbin']
+    shell:
+        """
+        {params.Rbin} -q --no-save --no-restore --slave \
+             -f {input.script} --args \
+             --sample {wildcards.sample} \
+             --working_dir {params.working_dir} \
+             --output_fn {output.sce}
+        """
 
 
-# rule render_descriptive_report:
-#     conda:
-#         op.join('envs', 'all_in_one.yaml')
-#     input:
-#         mapping_report = op.join(config['working_dir'], 'multimodal', 'mapping_summary.txt'),
-#         gtf = config['gtf'],
-#         script = op.join(config['repo_path'], 'src', 'generate_descriptive_singlecell_report.Rmd'),
-#         sces = expand(op.join(config['working_dir'], 'multimodal', '{sample}', '{sample}_sce.rds'),
-#                sample = get_sample_names()),
-#         installs = op.join(config['working_dir'], 'log', 'installs.log')
-#     output:
-#         html = op.join(config['working_dir'], 'multimodal', 'descriptive_report.html'),
-#         # cache = temp(op.join(config['repo_path'], 'process_sce_objects_cache')),
-#         # cached_files = temp(op.join(config['repo_path'], 'process_sce_objects_files'))
-#     log: op.join(config['working_dir'], 'multimodal', 'descriptive_report.log')
-#     params:
-#         multimodal_path = op.join(config['working_dir'], 'multimodal'),
-#         run_mode = config['run_mode'],
-#         working_dir = config['working_dir'],
-#         sample = "{wildcards.sample}",
-#         Rbin = config['Rbin'],
-#         simulate = config['simulate']
-#     shell:
-#         """
-#         simulate={params.simulate}
-
-#         if [ "$simulate" = "False" ]
-#         then
-
-#         {params.Rbin} --vanilla -e 'rmarkdown::render(\"{input.script}\", 
-#           output_file = \"{output.html}\", 
-#           params = list(multimodal_path = \"{params.multimodal_path}\", 
-#                         run_mode = \"{params.run_mode}\"))' &> {log}
-#         else
-#           echo "no report - that just just a simulation; but SCE objects are ready" > {output.html}
-#           # touch [output.cache]          
-#           # touch [output.cached_files]
-#         fi
-
-#         """
+rule render_descriptive_report:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        # mapping_report = op.join(config['working_dir'], 'multimodal', 'mapping_summary.txt'),
+        # gtf = config['gtf'],
+        script = op.join(config['repo_path'], 'src', 'generate_descriptive_singlecell_report.Rmd'),
+        sces = expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_sce.rds'),
+               sample = get_sample_names()),
+        installs = op.join(config['working_dir'], 'log', 'installs.log')
+    output:
+        html = op.join(config['working_dir'], 'align_wta', 'descriptive_report.html')
+        # cache = temp(op.join(config['repo_path'], 'process_sce_objects_cache')),
+        # cached_files = temp(op.join(config['repo_path'], 'process_sce_objects_files'))
+    log: op.join(config['working_dir'], 'align_wta', 'descriptive_report.log')
+    params:
+        path = op.join(config['working_dir'], 'align_wta'),
+        working_dir = op.join(config['working_dir']),
+        sample = "{wildcards.sample}",
+        Rbin = config['Rbin']
+    shell:
+        """
+        cd {params.working_dir}
+        mkdir -p {params.path}
+        {params.Rbin} --vanilla -e 'rmarkdown::render(\"{input.script}\", 
+          output_file = \"{output.html}\", 
+          params = list(path = \"{params.path}\"))' &> {log}
+        """
 
