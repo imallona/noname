@@ -10,6 +10,7 @@
 def get_sample_names():
     return([x['name'] for x in config['samples']])
 
+
 def get_cbumi_by_name(name):
     for i in range(len(config['samples'])):
         if config['samples'][i]['name'] == name:
@@ -29,6 +30,15 @@ def get_barcode_whitelist_by_name(name):
     for i in range(len(config['samples'])):
         if config['samples'][i]['name'] == name:
              return(config['samples'][i]['uses']['whitelist'])
+
+def get_species_by_name(name):
+    for i in range(len(config['samples'])):
+        if config['samples'][i]['name'] == name:
+             species = config['samples'][i]['uses']['species']
+             if species in ['mouse', 'human']:
+                 return(species)
+             else:
+                 raise('Unknown species (not mouse nor human), it was reported ' + species)
 
 def get_chromosomes(wildcards):
     # with open(op.join(config['working_dir'], 'data', 'chrom.sizes')) as fh:

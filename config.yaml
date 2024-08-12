@@ -26,6 +26,8 @@ gtf: data/gencode.vM35.primary_assembly.annotation.gtf
 # https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/GRCm39.primary_assembly.genome.fa.gz
 # caution uncompressed
 genome: data/GRCm39.primary_assembly.genome.fa
+## https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.pc_transcripts.fa.gz
+transcriptome: data/gencode.vM35.pc_transcripts.fa.gz
 
 sjdbOverhang: 61
 
@@ -35,3 +37,4 @@ samples:
       cb_umi_fq: data/325411_1-Unmod_WTA_S1_R1_001_downsampled_100M.fq.gz
       cdna_fq:   data/325411_1-Unmod_WTA_S1_R2_001_downsampled_100M.fq.gz
       whitelist: 384x3
+      species: 'mouse'

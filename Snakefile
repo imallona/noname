@@ -27,7 +27,9 @@ rule all:
         #                sample = get_sample_names()),
         # expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_sce.rds'),
         #        sample = get_sample_names()),
-        op.join(config['working_dir'], 'align_wta', 'descriptive_report.html')
+        op.join(config['working_dir'], 'align_wta', 'descriptive_report.html'),
+        'pbmc_flag'
+        
 
 rule index:
     conda:
@@ -243,5 +245,63 @@ rule render_descriptive_report:
         {params.Rbin} --vanilla -e 'rmarkdown::render(\"{input.script}\", 
           output_file = \"{output.html}\", 
           params = list(path = \"{params.path}\"))' &> {log}
+        """
+
+rule install_rustody:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    output:
+        op.join('soft', 'Rustody', 'target', '.rustc_info.json')
+    log:
+        'rustody_install.log'
+    shell:
+        """
+        mkdir -p soft
+        cd soft
+        curl https://sh.rustup.rs -sSf | sh
+        source "$HOME/.cargo/env"
+        git clone https://github.com/stela2502/Rustody --depth 1
+        cd Rustody
+        cargo build --release 2> {log}
+        """
+        
+rule rustody:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        rustody = op.join('soft', 'Rustody', 'target', '.rustc_info.json'),
+        transcriptome = config['transcriptome'],
+        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)        
+    output:
+        flag = '{sample}_flag'
+    threads: workflow.cores
+    params:
+        whitelist = lambda wildcards: get_barcode_whitelist_by_name(wildcards.sample),
+        species = lambda wildcards: get_species_by_name(wildcards.sample),
+        rustody_path = op.join('soft', 'Rustody', 'target', 'release')
+    shell:
+        """
+        source "$HOME/.cargo/env"
+        if [ {params.whitelist} == '384x3' ]; then
+           wl='v2.384'
+        elif [ {params}.whitelist == '96x3' ]; then
+           wl='v2.96'
+        else
+           wl='error_unknown_whitelist_spec'
+        fi
+
+        export PATH="{params.rustody_path}:"$PATH
+        quantify_rhapsody_multi \
+           --version "$wl" \
+           --specie {params.species} \
+           --reads {input.cb_umi} \
+           --outpath ~/Rustody_pdgfra \
+           --num-threads {threads} \
+           --file {input.cdna} \
+           --expression {input.transcriptome} \
+           --min-umi 100
+
+        touch {output.flag}
         """
 
