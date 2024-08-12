@@ -4,50 +4,37 @@ simulate: True
 ## software stack, will work out of the box if within the supplied docker container
 Rbin: R
 STAR: STAR
-# bamCoverage: bamCoverage ## not used anymore
-featureCounts: featureCounts
-bedtools: bedtools
-bedGraphToBigWig: bedGraphToBigWig
-faSize: faSize
+
+repo_path: '.'
 
 ## run limits
-nthreads: 2
+nthreads: 50
 max_mem_mb: 20000 ## these are megabytes
 
+## cell filtering
+soloCellFilter: "EmptyDrops_CR"
+
 ## full or relative path to the `root` of the rock_roi_method cloned repository
-rock_method_path: "."
+# rock_method_path: "."
 
-## full or relative path where outputs will be generated at
-working_dir: work
+## full, absolute path where outputs will be generated at
+working_dir: /home/imallona/src/noname/work
 
-## fill below these line if `simulate : False` -----------------------------------------
-## if `simulate: True` then all config below this line will be replaced by
-##   hardcoded values (within the Snakefile)
+# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.primary_assembly.annotation.gtf.gz
+# caution uncompressed
+gtf: data/gencode.vM35.primary_assembly.annotation.gtf
+# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/GRCm39.primary_assembly.genome.fa.gz
+# caution uncompressed
+genome: data/GRCm39.primary_assembly.genome.fa
+## https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.pc_transcripts.fa.gz
+transcriptome: data/gencode.vM35.pc_transcripts.fa.gz
 
-gtf: work/data/genome.gtf
-genome: work/data/genome.fa
-
-sjdbOverhang: 100
-
-## run mode, one of these (please see the README / docs):
-##   'tso off- and ontarget unique'
-##   'tso ontarget multi'
-##   'all'
-run_mode: 'all'
-
-## GTF `source` field identifying on-target rock- or roi- features
-capture_gtf_column_2_pattern : 'captured'
-featurecounts_t: 'exon' ## feature counting unit for featurecounts
-featurecounts_g: 'gene_id' ## feature grouping unit for featurecounts
+sjdbOverhang: 61
 
 samples:
-  - name: simulated
+  - name: pbmc
     uses:
-      cb_umi_fq: work/data/simulated/r1.fq.gz
-      cdna_fq: work/data/simulated/r2.fq.gz
-      whitelist: 96x3
-  - name: simulated2
-    uses:
-      cb_umi_fq: work/data/simulated/r1.fq.gz
-      cdna_fq: work/data/simulated/r2.fq.gz
-      whitelist: 96x3
+      cb_umi_fq: data/325411_1-Unmod_WTA_S1_R1_001_downsampled_100M.fq.gz
+      cdna_fq:   data/325411_1-Unmod_WTA_S1_R2_001_downsampled_100M.fq.gz
+      whitelist: 384x3
+      species: 'mouse'

@@ -12,8 +12,7 @@ output:
     df_print: kable
     theme: lumen
 params:
-    multimodal_path: ""
-    run_mode: ""
+    path: ""
 ---
 
 
@@ -32,8 +31,8 @@ suppressPackageStartupMessages({
 This report processes:
 
 ```{r}
-print(params$multimodal_path)
-print(params$run_mode)
+print(params$path)
+
 ```
 
 ```{r}
@@ -71,9 +70,7 @@ knitr::opts_chunk$set(fig.width = 5,
 ```
 
 ```{r}
-
-## dp <- "/home/imallona/ebrunner_spectral/mixing_mouse_genome_only/multimodal_nidhi/"
-dp <- params$multimodal_path
+dp <- params$path
 sces <- lapply(list.files(dp,
                           ".*sce.rds", recursive = TRUE),
                function(x) readRDS(file.path(dp, x)))
@@ -152,10 +149,6 @@ cat('\n\n')
 ## plotColData(sce, x = "sum", y="detected", colour_by = c("color"))
 ## cat('\n\n')
 
-
-cat('### ', 'Highest expressed', ' \n\n')
-plotHighestExprs(sce, exprs_values = "tso_off_and_ontarget_unique")
-cat('\n\n')
 ```
 
 
@@ -248,16 +241,15 @@ for (id in unique(colData(sce)$experiment)) {
 ## Quick clustering (WTA) {.tabset .tabset-pills}
 
 ```{r}
-meta <- as.data.frame(t(assay(altExp(sce, 'tso_ontarget_multi'))))[rownames(colData(sce)),]
-colnames(meta) <- paste0('captured_', colnames(meta))
-
 so <- CreateSeuratObject(counts = assay(sce, 'wta'),
                          project = "wta",
-                         meta.data = as.data.frame(cbind(colData(sce), meta)),
                          min.cells = 0, min.features = 0,
                          assay = 'RNA')
 
-rm(meta)
+stopifnot(all(rownames(so@meta.dta) == colnames(sce)))
+
+meta <- colData(sce)
+so@meta.data <- cbind(so@meta.data, meta)
 ```
 
 ```{r}
@@ -396,334 +388,6 @@ tryCatch({
 
 ```
 
-# TSO (on- and offtarget, unique) {.tabset .tabset-pills}
-
-## Per cell and per feature QC {.tabset .tabset-pills}
-
-```{r}
-## colData(sce) <-  colData(sce)[,'experiment']
-
-## most of the columns are WTA-based QC anyway
-colnames(colData(sce)) <- paste0('wta_', colnames(colData(sce)))
-colData(sce)$experiment <- colData(sce)$wta_experiment
-
-sce <- addPerCellQC(sce,
-                    assay.type = 'tso_off_and_ontarget_unique',
-                    subsets = list(mito = grep('^mt-', rownames(rowData(sce)),
-                                               value = TRUE, ignore.case = TRUE),
-                                   capture = rowData(sce)$captured == 'captured'))
-
-```
-
-
-```{r, fig.width = 5, fig.height = 4, results = 'asis'}
-
-cat('### ', 'Sum vs detected (by name)', ' \n\n')
-plotColData(sce, x = "sum", y="detected", colour_by = "experiment")
-cat('\n\n')
-
-cat('### ', 'Highest expressed', ' \n\n')
-plotHighestExprs(sce, exprs_values = "tso_off_and_ontarget_unique")
-cat('\n\n')
-```
-
-
-## QC after WTA filtering {.tabset .tabset-fade .tabset-pills}
-
-### Per cell and per feature QC {.tabset .tabset-fade .tabset-pills}
-
-```{r, fig.width = 5, fig.height = 4, results = 'asis'}
-cat('#### ', 'Sum vs detected (by name)', ' \n\n')
-plotColData(sce, x = "sum", y="detected", colour_by = c("experiment"))
-cat('\n\n')
-
-cat('### ', 'Highest expressed', ' \n\n')
-plotHighestExprs(sce, exprs_values = "tso_off_and_ontarget_unique")
-cat('\n\n')
-```
-
-
-### Overall quality metrics after QC (hists) {.tabset .tabset-fade .tabset-pills}
-
-```{r}
-ac <- function(col, alpha=1){
-  apply(sapply(col, col2rgb)/255, 2, 
-                     function(x) 
-                         rgb(x[1], x[2], x[3], alpha=alpha))
-}
-```
-
-```{r, results = 'asis'}
-
-for (id in unique(colData(sce)$experiment)) {
-    par(mfrow=c(2,2), mar=c(5.1, 4.1, 0.1, 0.1))
-
-    curr <- subset(sce, , experiment == id)
-    
-    cat('#### ', id, ' \n\n') 
-    hist(curr$total/1e3, xlab="Library sizes (thousands)", main="", 
-         breaks=20, col="grey80", ylab="Number of cells")
-
-    hist(curr$detected, xlab="Number of expressed genes", main="", 
-         breaks=20, col="grey80", ylab="Number of cells")
-
-    ## hist(curr$altexps_spikes_percent, xlab="ERCC proportion (%)",
-    ##      ylab="Number of cells", breaks=20, main="", col="grey80")
-    ## abline(v = attr(spike.drop, 'thresholds')['higher', id], col = 'blue')
-
-    hist(curr$subsets_mito_percent, xlab="Mitochondrial proportion (%)", 
-         ylab="Number of cells", breaks=20, main="", col="grey80")
-
-    cat('\n\n')
-}
-
-```
-
-### Overall quality metrics after WTA QC (scatter) {.tabset .tabset-fade .tabset-pills}
-
-```{r, results = 'asis'}
-for (id in unique(colData(sce)$experiment)) {
-    cat('#### ', id, ' \n\n') 
-    par(mfrow=c(2,2), mar=c(5.1, 4.1, 0.1, 0.1))
-
-    curr <- subset(sce, , experiment == id)
-    
-    plot(density(curr$total/1e3),
-         xlab = "library sizes (thousands)",
-         main = '')
-
-    rug(curr$total/1e3)
-
-    plot(y = curr$total/1e3,
-         x = curr$subsets_mito_percent,
-         ## col = ac(curr$color, 0.5),
-         pch = 20,
-         ylab = 'library size (thousands)',
-         xlab = 'mitochondrial proportion (%)',
-         ## col = ac('black', 0.5)
-         )
-
-    plot(y = curr$total/1e3,
-         x = curr$detected,
-         ## col = ac(curr$color, 0.5),
-         pch = 20,
-         ylab = 'library size (thousands)',
-         xlab = 'number of genes')
-    ## col = ac('black', 0.5)
-    ## )
-
-    ## plot(y = curr$total/1e3,
-    ##      x = curr$altexps_spikes_percent,
-    ##      col = ac(as.numeric(as.factor(curr$name)), 0.5),
-    ##      pch = 20,
-    ##      ylab = 'library size (thousands)',
-    ##      xlab = "ERCC proportion (%)",
-    ##      ## col = ac('black', 0.5)
-    ##      )
-
-    plot(y = curr$subsets_mito_percent,
-         x = curr$detected,
-         pch = 20,
-         xlab = 'number of genes',
-         ylab = 'mitochondrial proportion (%)',
-         col = ac('black', 0.5))
-
-    cat('\n\n')
-} 
-```
-
-
-## Quick clustering (TSO on- and offtarget unique) {.tabset .tabset-pills}
-
-```{r}
-meta <- as.data.frame(t(assay(altExp(sce, 'tso_ontarget_multi'))))[rownames(colData(sce)),]
-colnames(meta) <- paste0('captured_', colnames(meta))
-
-so <- CreateSeuratObject(counts = assay(sce, 'tso_off_and_ontarget_unique'),
-                         project = "tso unique",
-                         meta.data = as.data.frame(cbind(colData(sce), meta)),
-                         min.cells = 0, min.features = 0,
-                         assay = 'RNA')
-
-rm(meta)
-```
-
-```{r}
-so <- NormalizeData(object = so, normalization.method = 'LogNormalize', scale.factor = 10000)
-so <- FindVariableFeatures(so, selection.method = "vst", nfeatures = 2000)
-
-so <-  ScaleData(so, features = rownames(so))
-
-so <- RunPCA(object = so,
-             features = VariableFeatures(so),
-             verbose = FALSE,
-             npcs = 50)
-
-```
-
-
-### Loadings
-
-```{r, fig.width = 12, fig.height = 8}
-VizDimLoadings(object = so, dims = 1:4)
-```
-
-### Elbow
-
-```{r, fig.width =4, fig.height = 4}
-print(ElbowPlot(object = so, ndims = 50))
-
-```
-
-```{r}
-dims <- 1:30
-```
-
-```{r, message = FALSE}
-
-so <- FindNeighbors(object = so, dims = dims)
-
-## (resolutions <- seq(0.2, 1.4, by = 0.6))
-resolutions <- c(0.1, 0.5)
-
-for (res in resolutions) {
-    so <- FindClusters(object = so, resolution = res)
-}
-
-```
-
-### PCA {.tabset .tabset-fade .tabset-pills}
-
-```{r, fig.width = 7, fig.height = 4, results='asis'}
-
-## print(colnames(so@meta.data))
-
-layers <- c("experiment",
-            grep('snn_res', colnames(so@meta.data), value = TRUE))
-
-for (item in layers){
-
-    cat('#### ', item, ' \n\n')
-    print(DimPlot(object = so, reduction = "pca", group.by = item, shuffle = TRUE) +
-          ggtitle(item) +
-          theme(legend.position="right", aspect.ratio = 1))
-    cat('\n\n')
-}
-
-cat('#### RNA counts \n\n')
-FeaturePlot(object = so, reduction = "pca", features = 'nCount_RNA') +
-    theme(legend.position="right", aspect.ratio = 1)
-cat('\n\n')
-
-cat('#### Number of features \n\n')
-FeaturePlot(object = so, reduction = "pca", features = 'nFeature_RNA')+
-    theme(legend.position="right", aspect.ratio = 1)
-cat('\n\n')
-
-cat('#### Percent mitochondrial reads \n\n')
-FeaturePlot(object = so, reduction = "pca", features = 'subsets_mito_percent')+
-    theme(legend.position="right", aspect.ratio = 1)
-cat('\n\n')
-
-captures <- grep('captured', colnames(so@meta.data), value = TRUE)
-for (item in captures){
-     tryCatch({   
-        cat('#### ', item, ' \n\n')
-        print(FeaturePlot(object = so, reduction = "pca", features = item)+
-            theme(legend.position="right", aspect.ratio = 1))
-        cat('\n\n')
-}, error = function(x) print(x))
-}
-
-
-```
-
-### UMAPs {.tabset .tabset-fade .tabset-pills}
-
-```{r, fig.width = 8, fig.height = 4, message = FALSE}
-so <- RunUMAP(object = so, reduction = "pca", 
-              dims = dims)
-```
-
-
-```{r, fig.width = 7, fig.height = 4, results='asis'}
-
-for (item in layers){
-    cat('#### ', item, ' \n\n')
-    print(DimPlot(object = so, reduction = "umap", group.by = item, shuffle = TRUE) +
-          ggtitle(item) +
-          theme(legend.position="right", aspect.ratio = 1))
-    cat('\n\n')
-}
-
-cat('#### RNA counts \n\n')
-FeaturePlot(object = so, reduction = "umap", features = 'nCount_RNA') +
-    theme(legend.position="right", aspect.ratio = 1)
-cat('\n\n')
-
-cat('#### Number of features \n\n')
-FeaturePlot(object = so, reduction = "umap", features = 'nFeature_RNA') +
-    theme(legend.position="right", aspect.ratio = 1)
-cat('\n\n')
-
-cat('#### Percent mitochondrial reads \n\n')
-FeaturePlot(object = so, reduction = "umap", features = 'subsets_mito_percent') +
-    theme(legend.position="right", aspect.ratio = 1)
-cat('\n\n')
-
-for (item in captures){
-tryCatch({
-    
-    cat('#### ', item, ' \n\n')
-    print(FeaturePlot(object = so, reduction = "umap", features = item)+
-        theme(legend.position="right", aspect.ratio = 1))
-    cat('\n\n')
-    }, error = function(x) print(x))
-}
-
-```
-
-
-# TSO ontarget
-
-## Raw counts {.tabset .tabset-pills}
-
-```{r, results = 'asis'}
-
-print(rownames(altExp(sce, 'tso_ontarget_multi')))
-
-colData(altExp(sce, 'tso_ontarget_multi')) <- colData(sce)
-
-for (experiment in unique(colData(altExp(sce, 'tso_ontarget_multi'))$experiment)) {
-    cat('### ', experiment, ' \n\n')
-    
-    idx <- colData(altExp(sce, 'tso_ontarget_multi'))$experiment == experiment
-    plot(colSums(assay(altExp(sce[,idx], 'tso_ontarget_multi'))),
-         main = experiment,
-         xlab = 'Cell (index)')
-
-    cat('\n\n')
-}
-```
-
-## Detection rates {.tabset .tabset.pills}
-
-These are percentage of cells expressing each (captured) feature.
-
-```{r, results = 'asis'}
-for (experiment in unique(colData(altExp(sce, 'tso_ontarget_multi'))$experiment)) {
-    cat('### ', experiment, ' \n\n')
-    
-    idx <- colData(altExp(sce, 'tso_ontarget_multi'))$experiment == experiment
-    print(knitr::kable(apply(assay(altExp(sce[,idx], 'tso_ontarget_multi')),
-          1,
-          function(x) sum(x > 0)/sum(idx) * 100)))
-         
-
-    cat('\n\n')
-}
-
-```
 
 # Session info
 
