@@ -23,12 +23,13 @@ print(get_sample_names())
 
 rule all:
     input:
-        # expand(op.join(config['working_dir'], 'align_wta', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-        #                sample = get_sample_names()),
-        # expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_sce.rds'),
-        #        sample = get_sample_names()),
+        # expand(op.join(config['working_dir'], 'tasseq', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+                       # sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_tasseq_sce.rds'),
+               sample = get_sample_names()),
         op.join(config['working_dir'], 'align_wta', 'descriptive_report.html'),
-        'pbmc_flag'
+        'pbmc_rustody', 'pbmc_kallisto'
+
         
 
 rule index:
@@ -82,7 +83,7 @@ rule prepare_whitelists:
         symlink_whitelist(sample)
 
 
-rule align_wta:
+rule align_wta_rockroi_style:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
@@ -217,6 +218,32 @@ rule generate_sce:
              --output_fn {output.sce}
         """
 
+                
+rule generate_sce_tasseq:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        wta_filtered = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out',
+                               'Gene', 'filtered', 'matrix.mtx'),
+        # gtf = config['gtf'],
+        script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
+        installs = op.join(config['working_dir'], 'log', 'installs.log')
+    output:
+        sce = op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_tasseq_sce.rds')
+    params:
+        align_path = op.join(config['working_dir'], 'tasseq'),
+        working_dir = config['working_dir'],
+        sample = "{wildcards.sample}",
+        Rbin = config['Rbin']
+    shell:
+        """
+        {params.Rbin} -q --no-save --no-restore --slave \
+             -f {input.script} --args \
+             --sample {wildcards.sample} \
+             --working_dir {params.working_dir} \
+             --output_fn {output.sce}
+        """
+
 
 rule render_descriptive_report:
     conda:
@@ -265,7 +292,7 @@ rule install_rustody:
         cargo build --release 2> {log}
         """
         
-rule rustody:
+rule rustody_CAUTIONMAXREADS:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
@@ -274,7 +301,7 @@ rule rustody:
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)        
     output:
-        flag = '{sample}_flag'
+        flag = '{sample}_rustody'
     threads: workflow.cores
     params:
         whitelist = lambda wildcards: get_barcode_whitelist_by_name(wildcards.sample),
@@ -300,8 +327,83 @@ rule rustody:
            --num-threads {threads} \
            --file {input.cdna} \
            --expression {input.transcriptome} \
-           --min-umi 100
+           --min-umi 1 \
+           --max-reads 100000  ## todo REMOVE THIS
 
         touch {output.flag}
         """
 
+rule kallisto:
+    conda:
+        op.join('envs', 'kallisto.yaml')
+    input:
+        transcriptome = config['transcriptome'],
+        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)
+    output:
+        '{sample}_kallisto'
+    shell:
+        """
+        kallisto bus -l > {output}
+        """
+
+
+# https://github.com/s-shichino1989/TASSeq_EnhancedBeads/blob/e48fd2c2fd5a23d622f03e206b8fbe87772fd57f/shell_scripts/Rhapsody_STARsolo.sh#L18
+rule align_wta_tasseq_style:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
+        index_flag = op.join(config['working_dir'] , 'data', 'index', 'SAindex'),
+        gtf = config['gtf'],
+        cb1 = op.join(config['working_dir'], 'align_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
+        cb2 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+        cb3 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
+    output:
+        bam = op.join(config['working_dir'], 'tasseq', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+        filtered_barcodes = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out', 'Gene',
+                                    'filtered', 'barcodes.tsv'),
+        filtered_counts = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out', 'Gene',
+                                  'filtered', 'matrix.mtx')
+    threads: workflow.cores
+    params:
+        threads = min(10, workflow.cores),
+        path = op.join(config['working_dir'], 'tasseq', "{sample}/"),
+        index_path = op.join(config['working_dir'] , 'data', 'index'),
+        STAR = config['STAR'],
+        # num_cells = get_expected_cells_by_name("{sample}"),
+        tmp = op.join(config['working_dir'], 'tmp_tasseq_{sample}'),
+        maxmem = config['max_mem_mb'] * 1024 * 1024,
+        sjdbOverhang = config['sjdbOverhang'],
+        soloCellFilter = config['soloCellFilter']
+    shell:
+        """
+        rm -rf {params.tmp}
+        mkdir -p {params.path} 
+
+        {params.STAR} --runThreadN {params.threads} \
+          --genomeDir {params.index_path} \
+        --readFilesIn {input.cdna} {input.cbumi} \
+        --outFileNamePrefix {params.path} \
+        --readFilesCommand zcat \
+        --clipAdapterType CellRanger4 \
+        --outSAMtype BAM SortedByCoordinate \
+        --outBAMsortingThreadN {params.threads} \
+        --outSAMattributes NH HI nM AS CR UR CB UB GX GN \
+        --outSAMunmapped Within \
+        --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 \
+        --outFilterMultimapScoreRange 0 --seedSearchStartLmax 30 \
+        --soloCellFilter {params.soloCellFilter} \
+        --soloUMIdedup Exact \
+        --soloMultiMappers Rescue \
+        --soloFeatures Gene GeneFull \
+        --soloAdapterSequence NNNNNNNNNGTGANNNNNNNNNGACA \
+        --soloCBmatchWLtype EditDist_2 \
+        --soloCBwhitelist {input.cb1} {input.cb2} {input.cb3} \
+        --soloType CB_UMI_Complex \
+        --soloUMIlen 8 \
+        --soloCBposition 2_0_2_8 2_13_2_21 3_1_3_9 \
+        --soloUMIposition 3_10_3_17 
+    rm -rf {params.tmp}
+        """
