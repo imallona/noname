@@ -28,7 +28,7 @@ rule all:
         expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_tasseq_sce.rds'),
                sample = get_sample_names()),
         op.join(config['working_dir'], 'align_wta', 'descriptive_report.html'),
-        'pbmc_rustody', 'pbmc_kallisto'
+        'pbmc_rustody' #, 'pbmc_kallisto'
 
         
 
@@ -340,11 +340,16 @@ rule kallisto:
         transcriptome = config['transcriptome'],
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)
+    params:
+        index_name = 'kallisto_index'
     output:
         '{sample}_kallisto'
+    threads: workflow.cores
     shell:
         """
-        kallisto bus -l > {output}
+        kallisto index --threads={threads} \
+           -i={params.index_name} 
+           {input.transcriptome} 
         """
 
 

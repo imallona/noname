@@ -82,7 +82,7 @@ for (i in 1:length(sces)) {
                                                      ".*sce.rds", recursive = TRUE)),
                                           '_',
                                           colnames(sces[[i]]))
-    colData(sces[[i]])$experiment <- mainExpName(sces[[i]])
+    colData(sces[[i]])$experiment <- paste(mainExpName(sces[[i]]), i)
     colnames(rowData(sces[[i]])) <- c("name", "type", "value")
     rownames(sces[[i]]) <- paste0(rowData(sces[[i]])$name, "__", rownames(sces[[i]]))
 }
