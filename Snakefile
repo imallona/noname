@@ -33,8 +33,10 @@ rule all:
         # 'pbmc_rustody',
         # expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
                # sample = get_sample_names()),
-        op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
+        # op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
         expand(op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
+               sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam'),
                sample = get_sample_names())
 
 
@@ -89,7 +91,7 @@ rule prepare_whitelists:
         symlink_whitelist(sample)
 
 
-rule starsolo_wta_starsolo:
+rule starsolo_wta:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
@@ -203,8 +205,6 @@ rule install_r_deps:
         op.join(config['working_dir'], 'benchmarks', 'r_install.txt')
     shell:
         """
-        mkdir -p {params.log_path}
-
         {params.Rbin} -q --no-save --no-restore --slave \
              -f {input.script} &> {log}
          """
@@ -377,13 +377,12 @@ rule standardize_cb_umis_cutadapt:
     shell:
         """
         mkdir -p {params.path}
-        pigz -p {threads} --decompress --stdout {input.cb_umi} | \
-           cutadapt -g "NNNNNNNNNGTGANNNNNNNNNGACANNNNNNNNNNNNNNNNN;min_overlap=43;noindels" \
+        cutadapt -g "NNNNNNNNNGTGANNNNNNNNNGACANNNNNNNNNNNNNNNNN;min_overlap=43;noindels" \
            --action=crop \
            --discard-untrimmed \
            --cores {threads} \
            -e 0 \
-           - | cut -c1-9,14-22,27- | pigz -p {threads} > {output.standardized_cb_umi}
+           {input.cb_umi} | cut -c1-9,14-22,27- | pigz -p {threads} > {output.standardized_cb_umi}
         """
 
 ## conda recipe is broken        
@@ -407,6 +406,7 @@ rule kallisto_index:
         kallisto index --threads={threads} \
            -i={params.index_name} {input.transcriptome} &> {log}
         """
+
 ## conda recipe is broken 
 rule kallisto_bus:
     # conda:
@@ -462,16 +462,75 @@ for sample in get_sample_names():
             --genomeFastaFiles {input.fa} &> {log}
             """
 
-# rule extract_unmapped_startsolo_wta:
+rule extract_unmapped_startsolo_wta_tagged_fastqs:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam')
+    output:
+        temp(op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_unmapped_tagged.fq.gz'))
+    threads:
+        1        
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', '{sample}_unaligned_tagged.log')
+    shell:
+        """
+        samtools view {input.bam} | \
+             awk -F " " '{{print "@"$22"__"$23"\\n"$10"\\n""+""\\n"$11}}' | \
+             pigz -c > {output}
+        """
     
+
+rule extract_sampletagslooking_fastqs:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        fq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_unmapped_tagged.fq.gz')
+    output:
+        fq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_sampletag_tagged.fq.gz')
+    threads:
+        workflow.cores
+    log:
+        op.join(config['working_dir'], 'logs', '{sample}_sampletags_cutadapt.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', '{sample}_sampletags_cutadapt.txt')
+    shell:
+        """
+        cutadapt -g ^GTTGTCAAGATGCTACCGTTCAGAG {input.fq} \
+          -j {threads} --action=retain --discard-untrimmed \
+          -o {output.fq} &> {log}
+        """
         
-## rule align_starsolo_sampletags:
-    # input:
-    # output:
-    # params:
-    # log:
-    # benchmark:
-    # shell:
+rule align_star_sampletags:
+    input:
+        # fastq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_unmapped_tagged.fq.gz')
+        fastq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_sampletag_tagged.fq.gz'),
+        idx_flag = op.join(config['working_dir'] , 'data', species + '_index', 'sampletags', 'SAindex')
+    output:
+        bam = op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam')
+    params:
+        output_dir = op.join(config['working_dir'], 'sampletags', '{sample}/'),
+        sampletags_genome_dir = op.join(config['working_dir'] , 'data', species + '_index', 'sampletags')
+    log:
+        op.join(config['working_dir'], 'logs', '{sample}_align_sampletags_star.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', '{sample}_align_sampletags_star.txt')
+    shell:
+        """
+        STAR --runThreadN {threads} \
+          --genomeDir {params.sampletags_genome_dir} \
+          --readFilesCommand zcat \
+          --outFileNamePrefix {params.output_dir} \
+          --readFilesIn {input.fastq}  \
+          --outSAMtype BAM SortedByCoordinate \
+         # --quantMode GeneCounts \
+         # --sjdbGTFfile genomes/sampletags.gtf \
+          --outFilterScoreMinOverLread 0.5 \
+          --outFilterMatchNminOverLread 0.5 \
+          --outFilterMismatchNmax 25 \
+          --seedSearchStartLmax 30 \
+          --alignIntronMax 1 &> {log}
+        """
     
 # # https://github.com/s-shichino1989/TASSeq_EnhancedBeads/blob/e48fd2c2fd5a23d622f03e206b8fbe87772fd57f/shell_scripts/Rhapsody_STARsolo.sh#L18
 # rule starsolo_wta_tasseq_style:
