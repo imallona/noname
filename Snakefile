@@ -29,13 +29,12 @@ print(get_sample_names())
 
 rule all:
     input:
-        # expand(op.join(config['working_dir'], 'tasseq', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-                       # sample = get_sample_names()),
-        # expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_tasseq_sce.rds'),
-        #        sample = get_sample_names()),
         op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html'),
         # 'pbmc_rustody',
-        expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+        # expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+               # sample = get_sample_names()),
+        op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
+        expand(op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
                sample = get_sample_names())
 
 
@@ -149,6 +148,7 @@ rule starsolo_wta_starsolo:
      --outTmpDir {params.tmp} \
      --sjdbOverhang {params.sjdbOverhang} \
      --limitBAMsortRAM {params.maxmem} \
+     --outSAMunmapped Within \
      --soloMultiMappers {params.soloMultiMappers} {params.extraStarSoloArgs}
 
     rm -rf {params.tmp}
@@ -372,7 +372,8 @@ rule standardize_cb_umis_cutadapt:
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz")
     params:
         path = op.join(config['working_dir'], 'data', 'fastq')
-    threads: 5
+    threads:
+        workflow.cores
     shell:
         """
         mkdir -p {params.path}
@@ -380,12 +381,15 @@ rule standardize_cb_umis_cutadapt:
            cutadapt -g "NNNNNNNNNGTGANNNNNNNNNGACANNNNNNNNNNNNNNNNN;min_overlap=43;noindels" \
            --action=crop \
            --discard-untrimmed \
-           -e 0 | cut -c1-9,14-22,27- | pigz -p {threads} > {output.standardized_cb_umi}
+           --cores {threads} \
+           -e 0 \
+           - | cut -c1-9,14-22,27- | pigz -p {threads} > {output.standardized_cb_umi}
         """
-        
+
+## conda recipe is broken        
 rule kallisto_index:
-    conda:
-        op.join('envs', 'kallisto.yaml')
+    # conda:
+    #     op.join('envs', 'kallisto.yaml')
     input:
         transcriptome = config['transcriptome']
     params:
@@ -401,13 +405,12 @@ rule kallisto_index:
     shell:
         """
         kallisto index --threads={threads} \
-           -i={params.index_name} 
-           {input.transcriptome} &> {log}
+           -i={params.index_name} {input.transcriptome} &> {log}
         """
-
+## conda recipe is broken 
 rule kallisto_bus:
-    conda:
-        op.join('envs', 'kallisto.yaml')
+    # conda:
+    #     op.join('envs', 'kallisto.yaml')
     input:
         transcriptome = config['transcriptome'],
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
@@ -430,7 +433,46 @@ rule kallisto_bus:
             -t {threads} \
             {input.standardized_cb_umi} {input.cdna} &> {log}
         """
+
+## from https://github.com/imallona/rock_roi_paper/blob/imallona/03_leukemia/02_sampletags_again.sh
+
+for sample in get_sample_names():
+    species = get_species_by_name(name = sample)
+    rule star_index_sampletags:
+        conda:
+            op.join('envs', 'all_in_one.yaml')
+        input:
+            fa = op.join('data', 'sampletags', species + '_sampletags.fa')
+        output:
+            op.join(config['working_dir'] , 'data', species + '_index', 'sampletags', 'SAindex')
+        threads:
+            workflow.cores
+        params:
+            output_dir = op.join(config['working_dir'], 'data', species + '_index', 'sampletags')
+        log:
+            op.join(config['working_dir'], 'logs', species + '_sampletags_index.log')
+        benchmark:
+            op.join(config['working_dir'], 'benchmarks', species + '_sampletags__index.txt')
+        shell:
+            """
+            STAR --runThreadN {threads} \
+            --runMode genomeGenerate \
+            --genomeSAindexNbases 2 \
+            --genomeDir {params.output_dir} \
+            --genomeFastaFiles {input.fa} &> {log}
+            """
+
+# rule extract_unmapped_startsolo_wta:
+    
         
+## rule align_starsolo_sampletags:
+    # input:
+    # output:
+    # params:
+    # log:
+    # benchmark:
+    # shell:
+    
 # # https://github.com/s-shichino1989/TASSeq_EnhancedBeads/blob/e48fd2c2fd5a23d622f03e206b8fbe87772fd57f/shell_scripts/Rhapsody_STARsolo.sh#L18
 # rule starsolo_wta_tasseq_style:
 #     conda:
