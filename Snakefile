@@ -398,9 +398,10 @@ rule kallisto_index:
     input:
         transcriptome = config['transcriptome']
     params:
-        index_name = op.join('data', 'index', 'kallisto_index')
+        index_name = 'kallisto.index',
+        output_dir= op.join(config['working_dir'], 'data', 'index', 'kallisto')        
     output:
-        op.join(config['working_dir'] , 'data', 'index', 'kallisto')
+        index_name = op.join(config['working_dir'], 'data', 'index', 'kallisto', 'kallisto.index')
     threads:
         workflow.cores
     log:
@@ -409,8 +410,10 @@ rule kallisto_index:
         op.join(config['working_dir'], 'benchmarks', 'kallisto_index.txt')
     shell:
         """
-        kallisto index --threads={threads} \
-           -i={params.index_name} {input.transcriptome} &> {log}
+        mkdir -p {params.output_dir}
+        cd {params.output_dir}
+        
+        kallisto index --threads {threads} --i {params.index_name} {input.transcriptome} &> {log}
         """
 
 ## conda recipe is broken 
@@ -421,7 +424,7 @@ rule kallisto_bus:
         transcriptome = config['transcriptome'],
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
-        kallisto_index = op.join(config['working_dir'] , 'data', 'index', 'kallisto')
+        kallisto_index = op.join(config['working_dir'], 'data', 'index', 'kallisto', 'kallisto.index'),
     output:
         op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec')
     params:
@@ -429,11 +432,9 @@ rule kallisto_bus:
     threads: workflow.cores
     log:
         op.join(config['working_dir'], 'logs', '{sample}_kallisto_bus.log')
-    log:
-        op.join(config['working_dir'], 'benchmarks', '{sample}_kallisto_bus.txt')
     shell:
         """
-        kallisto bus --index {input.index} \
+        kallisto bus --index {input.kallisto_index} \
             --output-dir {params.output_dir} \
             -x '0,0,27:0,27,35:1,0,0' \
             -t {threads} \
