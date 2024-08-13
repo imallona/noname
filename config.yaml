@@ -12,10 +12,13 @@ nthreads: 50
 max_mem_mb: 20000 ## these are megabytes
 
 ## cell filtering
-soloCellFilter: "EmptyDrops_CR"
+soloCellFilter: "EmptyDrops_CR" # None, TopCells, CellRanger2.2
 
-## full or relative path to the `root` of the rock_roi_method cloned repository
-# rock_method_path: "."
+## multimappers
+soloMultiMappers: "Unique" # Uniform, Rescue , PropUnique, EM
+
+## extra STARsolo arguments
+extraStarSoloArgs: ""
 
 ## full, absolute path where outputs will be generated at
 working_dir: /home/imallona/src/noname/work

@@ -8,6 +8,7 @@
 ## GPLv3
 
 import os.path as op
+import os
 
 # include: op.join('src', 'simulate.snmk')
     
@@ -19,20 +20,26 @@ include: "src/workflow_functions.py"
 if not op.isabs(config['repo_path']):
     config['repo_path'] = op.join(workflow.basedir, config['repo_path'])
 
+os.makedirs(op.join(config['working_dir'], 'logs'), exist_ok=True)
+os.makedirs(op.join(config['working_dir'], 'benchmarks'), exist_ok=True)
+
 print(get_sample_names())
+
+
 
 rule all:
     input:
         # expand(op.join(config['working_dir'], 'tasseq', '{sample}', 'Aligned.sortedByCoord.out.bam'),
                        # sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_tasseq_sce.rds'),
-               sample = get_sample_names()),
-        op.join(config['working_dir'], 'align_wta', 'descriptive_report.html'),
-        'pbmc_rustody' #, 'pbmc_kallisto'
+        # expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_tasseq_sce.rds'),
+        #        sample = get_sample_names()),
+        op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html'),
+        # 'pbmc_rustody',
+        expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+               sample = get_sample_names())
 
-        
 
-rule index:
+rule star_index:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
@@ -50,7 +57,9 @@ rule index:
         sjdbOverhang = config['sjdbOverhang'],
         indexNbases = 4 if config['simulate'] else 14
     log:
-        op.join(config['working_dir'], 'data', 'indexing.log')
+        op.join(config['working_dir'], 'logs', 'star_indexing.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'star_indexing.txt')
     shell:
       """
     mkdir -p {params.processing_path}
@@ -72,18 +81,16 @@ rule prepare_whitelists:
     input:
         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample)
-        # r1 = op.join(config['working_dir'], 'data', "{sample}", 'r1.fq.gz'),
-        # r2 = op.join(config['working_dir'], 'data', "{sample}", 'r2.fq.gz')
     output:
-        cb1 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS1.txt'),
-        cb2 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-        cb3 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
+        cb1 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS1.txt'),
+        cb2 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+        cb3 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
     run:
         sample = wildcards.sample
         symlink_whitelist(sample)
 
 
-rule align_wta_rockroi_style:
+rule starsolo_wta_starsolo:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
@@ -91,24 +98,31 @@ rule align_wta_rockroi_style:
         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
         index_flag = op.join(config['working_dir'] , 'data', 'index', 'SAindex'),
         gtf = config['gtf'],
-        cb1 = op.join(config['working_dir'], 'align_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
-        cb2 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-        cb3 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
+        cb1 = op.join(config['working_dir'], 'starsolo_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
+        cb2 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+        cb3 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
     output:
-        bam = op.join(config['working_dir'], 'align_wta', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-        filtered_barcodes = op.join(config['working_dir'], 'align_wta', '{sample}', 'Solo.out', 'Gene',
-                                    'filtered', 'barcodes.tsv')
-    threads: workflow.cores
+        bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+        filtered_barcodes = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out', 'Gene',
+                                    'filtered', 'matrix.mtx')
+    threads:
+        workflow.cores
+    log:
+        op.join(config['working_dir'], 'logs', 'starsolo_{sample}.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'star_{sample}.txt')
     params:
         threads = min(10, workflow.cores),
-        path = op.join(config['working_dir'], 'align_wta', "{sample}/"),
+        path = op.join(config['working_dir'], 'starsolo_wta', "{sample}/"),
         index_path = op.join(config['working_dir'] , 'data', 'index'),
         STAR = config['STAR'],
         # num_cells = get_expected_cells_by_name("{sample}"),
-        tmp = op.join(config['working_dir'], 'tmp_align_wta_{sample}'),
+        tmp = op.join(config['working_dir'], 'tmp_starsolo_wta_{sample}'),
         maxmem = config['max_mem_mb'] * 1024 * 1024,
         sjdbOverhang = config['sjdbOverhang'],
-        soloCellFilter = config['soloCellFilter']
+        soloCellFilter = config['soloCellFilter'],
+        soloMultiMappers = config['soloMultiMappers'],
+        extraStarSoloArgs = config['extraStarSoloArgs']
     shell:
         """
    rm -rf {params.tmp}
@@ -134,7 +148,8 @@ rule align_wta_rockroi_style:
      --sjdbGTFfile {input.gtf} \
      --outTmpDir {params.tmp} \
      --sjdbOverhang {params.sjdbOverhang} \
-     --limitBAMsortRAM {params.maxmem}
+     --limitBAMsortRAM {params.maxmem} \
+     --soloMultiMappers {params.soloMultiMappers} {params.extraStarSoloArgs}
 
     rm -rf {params.tmp}
         """
@@ -154,23 +169,21 @@ rule align_wta_rockroi_style:
 #         {params.faSize} -detailed -tab {input.fa} > {output}
 #         """
 
-## TODO keep only if generating coverage tracks
-rule index_bam:
-    conda:
-        op.join('envs', 'all_in_one.yaml')
-    input:
-        bam = op.join(config['working_dir'], 'align_wta', '{sample}', 'Aligned.sortedByCoord.out.bam')
-    output:
-        bai = op.join(config['working_dir'], 'align_wta', '{sample}',
-                      'Aligned.sortedByCoord.out.bam.bai')
-    threads: workflow.cores
-    shell:
-        """
-        samtools index -@ {threads} {input.bam}     
-        """
+# ## TODO keep only if generating coverage tracks
+# rule index_bam:
+#     conda:
+#         op.join('envs', 'all_in_one.yaml')
+#     input:
+#         bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam')
+#     output:
+#         bai = op.join(config['working_dir'], 'starsolo_wta', '{sample}',
+#                       'Aligned.sortedByCoord.out.bam.bai')
+#     threads: workflow.cores
+#     shell:
+#         """
+#         samtools index -@ {threads} {input.bam}     
+#         """
 
-# rule generate_tracks:
-    
 ## yes the log is considered an output - to pass as a flag
 ## R_LIBS are conda's if run in conda, but /home/rock/R_LIBs if run in docker, and user's if run directly
 rule install_r_deps:
@@ -184,65 +197,72 @@ rule install_r_deps:
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
         Rbin = config['Rbin'],
-        log_path = op.join(config['working_dir'], 'log')
+    log:
+        op.join(config['working_dir'], 'logs', 'r_install.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'r_install.txt')
     shell:
         """
         mkdir -p {params.log_path}
 
         {params.Rbin} -q --no-save --no-restore --slave \
-             -f {input.script} &> {output.log}
-#         """
+             -f {input.script} &> {log}
+         """
         
 rule generate_sce:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        wta_filtered = op.join(config['working_dir'], 'align_wta', '{sample}', 'Solo.out',
+        wta_filtered = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out',
                                'Gene', 'filtered', 'matrix.mtx'),
         # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
     output:
-        sce = op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_sce.rds')
+        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_sce.rds')
     params:
-        align_path = op.join(config['working_dir'], 'align_wta'),
+        align_path = op.join(config['working_dir'], 'starsolo_wta'),
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
         Rbin = config['Rbin']
+    log:
+        op.join(config['working_dir'], 'logs', 'r_sce_generation_{sample}.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'r_sce_generation_{sample}.txt')
     shell:
         """
         {params.Rbin} -q --no-save --no-restore --slave \
              -f {input.script} --args \
              --sample {wildcards.sample} \
              --working_dir {params.working_dir} \
-             --output_fn {output.sce}
+             --output_fn {output.sce} &> {log}
         """
 
                 
-rule generate_sce_tasseq:
-    conda:
-        op.join('envs', 'all_in_one.yaml')
-    input:
-        wta_filtered = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out',
-                               'Gene', 'filtered', 'matrix.mtx'),
-        # gtf = config['gtf'],
-        script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
-        installs = op.join(config['working_dir'], 'log', 'installs.log')
-    output:
-        sce = op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_tasseq_sce.rds')
-    params:
-        align_path = op.join(config['working_dir'], 'tasseq'),
-        working_dir = config['working_dir'],
-        sample = "{wildcards.sample}",
-        Rbin = config['Rbin']
-    shell:
-        """
-        {params.Rbin} -q --no-save --no-restore --slave \
-             -f {input.script} --args \
-             --sample {wildcards.sample} \
-             --working_dir {params.working_dir} \
-             --output_fn {output.sce}
-        """
+# rule generate_sce_tasseq:
+#     conda:
+#         op.join('envs', 'all_in_one.yaml')
+#     input:
+#         wta_filtered = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out',
+#                                'Gene', 'filtered', 'matrix.mtx'),
+#         # gtf = config['gtf'],
+#         script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
+#         installs = op.join(config['working_dir'], 'log', 'installs.log')
+#     output:
+#         sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_tasseq_sce.rds')
+#     params:
+#         align_path = op.join(config['working_dir'], 'tasseq'),
+#         working_dir = config['working_dir'],
+#         sample = "{wildcards.sample}",
+#         Rbin = config['Rbin']
+#     shell:
+#         """
+#         {params.Rbin} -q --no-save --no-restore --slave \
+#              -f {input.script} --args \
+#              --sample {wildcards.sample} \
+#              --working_dir {params.working_dir} \
+#              --output_fn {output.sce}
+#         """
 
 
 rule render_descriptive_report:
@@ -252,16 +272,19 @@ rule render_descriptive_report:
         # mapping_report = op.join(config['working_dir'], 'multimodal', 'mapping_summary.txt'),
         # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_descriptive_singlecell_report.Rmd'),
-        sces = expand(op.join(config['working_dir'], 'align_wta', '{sample}', '{sample}_sce.rds'),
+        sces = expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_sce.rds'),
                sample = get_sample_names()),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
     output:
-        html = op.join(config['working_dir'], 'align_wta', 'descriptive_report.html')
+        html = op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html')
         # cache = temp(op.join(config['repo_path'], 'process_sce_objects_cache')),
         # cached_files = temp(op.join(config['repo_path'], 'process_sce_objects_files'))
-    log: op.join(config['working_dir'], 'align_wta', 'descriptive_report.log')
+    log:
+        op.join(config['working_dir'], 'logs', 'descriptive_report.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'descriptive_report.log')
     params:
-        path = op.join(config['working_dir'], 'align_wta'),
+        path = op.join(config['working_dir'], 'starsolo_wta'),
         working_dir = op.join(config['working_dir']),
         sample = "{wildcards.sample}",
         Rbin = config['Rbin']
@@ -280,7 +303,9 @@ rule install_rustody:
     output:
         op.join('soft', 'Rustody', 'target', '.rustc_info.json')
     log:
-        'rustody_install.log'
+        op.join(config['working_dir'], 'logs', 'rustody_install.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'rustody_install.txt')
     shell:
         """
         mkdir -p soft
@@ -302,11 +327,16 @@ rule rustody_CAUTIONMAXREADS:
         cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)        
     output:
         flag = '{sample}_rustody'
-    threads: workflow.cores
+    threads:
+        workflow.cores
     params:
         whitelist = lambda wildcards: get_barcode_whitelist_by_name(wildcards.sample),
         species = lambda wildcards: get_species_by_name(wildcards.sample),
         rustody_path = op.join('soft', 'Rustody', 'target', 'release')
+    log:
+        op.join(config['working_dir'], 'logs', 'rustody_{sample}.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'rustody_{sample}.txt')
     shell:
         """
         source "$HOME/.cargo/env"
@@ -328,87 +358,135 @@ rule rustody_CAUTIONMAXREADS:
            --file {input.cdna} \
            --expression {input.transcriptome} \
            --min-umi 1 \
-           --max-reads 100000  ## todo REMOVE THIS
+           --max-reads 100000 $ > {log}
 
         touch {output.flag}
         """
 
-rule kallisto:
+rule standardize_cb_umis_cutadapt:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)
+    output:
+        standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz")
+    params:
+        path = op.join(config['working_dir'], 'data', 'fastq')
+    threads: 5
+    shell:
+        """
+        mkdir -p {params.path}
+        pigz -p {threads} --decompress --stdout {input.cb_umi} | \
+           cutadapt -g "NNNNNNNNNGTGANNNNNNNNNGACANNNNNNNNNNNNNNNNN;min_overlap=43;noindels" \
+           --action=crop \
+           --discard-untrimmed \
+           -e 0 | cut -c1-9,14-22,27- | pigz -p {threads} > {output.standardized_cb_umi}
+        """
+        
+rule kallisto_index:
+    conda:
+        op.join('envs', 'kallisto.yaml')
+    input:
+        transcriptome = config['transcriptome']
+    params:
+        index_name = op.join('data', 'index', 'kallisto_index')
+    output:
+        op.join(config['working_dir'] , 'data', 'index', 'kallisto')
+    threads:
+        workflow.cores
+    log:
+        op.join(config['working_dir'], 'logs', 'kallisto_index.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'kallisto_index.txt')
+    shell:
+        """
+        kallisto index --threads={threads} \
+           -i={params.index_name} 
+           {input.transcriptome} &> {log}
+        """
+
+rule kallisto_bus:
     conda:
         op.join('envs', 'kallisto.yaml')
     input:
         transcriptome = config['transcriptome'],
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
-        cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)
-    params:
-        index_name = 'kallisto_index'
+        standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
+        kallisto_index = op.join(config['working_dir'] , 'data', 'index', 'kallisto')
     output:
-        '{sample}_kallisto'
+        op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec')
+    params:
+        output_dir = op.join(config['working_dir'], 'kallisto', '{sample}')
     threads: workflow.cores
+    log:
+        op.join(config['working_dir'], 'logs', '{sample}_kallisto_bus.log')
+    log:
+        op.join(config['working_dir'], 'benchmarks', '{sample}_kallisto_bus.txt')
     shell:
         """
-        kallisto index --threads={threads} \
-           -i={params.index_name} 
-           {input.transcriptome} 
+        kallisto bus --index {input.index} \
+            --output-dir {params.output_dir} \
+            -x '0,0,27:0,27,35:1,0,0' \
+            -t {threads} \
+            {input.standardized_cb_umi} {input.cdna} &> {log}
         """
+        
+# # https://github.com/s-shichino1989/TASSeq_EnhancedBeads/blob/e48fd2c2fd5a23d622f03e206b8fbe87772fd57f/shell_scripts/Rhapsody_STARsolo.sh#L18
+# rule starsolo_wta_tasseq_style:
+#     conda:
+#         op.join('envs', 'all_in_one.yaml')
+#     input:
+#         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+#         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
+#         index_flag = op.join(config['working_dir'] , 'data', 'index', 'SAindex'),
+#         gtf = config['gtf'],
+#         cb1 = op.join(config['working_dir'], 'starsolo_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
+#         cb2 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+#         cb3 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
+#     output:
+#         bam = op.join(config['working_dir'], 'tasseq', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+#         filtered_barcodes = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out', 'Gene',
+#                                     'filtered', 'barcodes.tsv'),
+#         filtered_counts = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out', 'Gene',
+#                                   'filtered', 'matrix.mtx')
+#     threads: workflow.cores
+#     params:
+#         threads = min(10, workflow.cores),
+#         path = op.join(config['working_dir'], 'tasseq', "{sample}/"),
+#         index_path = op.join(config['working_dir'] , 'data', 'index'),
+#         STAR = config['STAR'],
+#         # num_cells = get_expected_cells_by_name("{sample}"),
+#         tmp = op.join(config['working_dir'], 'tmp_tasseq_{sample}'),
+#         maxmem = config['max_mem_mb'] * 1024 * 1024,
+#         sjdbOverhang = config['sjdbOverhang'],
+#         soloCellFilter = config['soloCellFilter']
+#     shell:
+#         """
+#         rm -rf {params.tmp}
+#         mkdir -p {params.path} 
 
-
-# https://github.com/s-shichino1989/TASSeq_EnhancedBeads/blob/e48fd2c2fd5a23d622f03e206b8fbe87772fd57f/shell_scripts/Rhapsody_STARsolo.sh#L18
-rule align_wta_tasseq_style:
-    conda:
-        op.join('envs', 'all_in_one.yaml')
-    input:
-        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
-        cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
-        index_flag = op.join(config['working_dir'] , 'data', 'index', 'SAindex'),
-        gtf = config['gtf'],
-        cb1 = op.join(config['working_dir'], 'align_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
-        cb2 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-        cb3 = op.join(config['working_dir'], 'align_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
-    output:
-        bam = op.join(config['working_dir'], 'tasseq', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-        filtered_barcodes = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out', 'Gene',
-                                    'filtered', 'barcodes.tsv'),
-        filtered_counts = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out', 'Gene',
-                                  'filtered', 'matrix.mtx')
-    threads: workflow.cores
-    params:
-        threads = min(10, workflow.cores),
-        path = op.join(config['working_dir'], 'tasseq', "{sample}/"),
-        index_path = op.join(config['working_dir'] , 'data', 'index'),
-        STAR = config['STAR'],
-        # num_cells = get_expected_cells_by_name("{sample}"),
-        tmp = op.join(config['working_dir'], 'tmp_tasseq_{sample}'),
-        maxmem = config['max_mem_mb'] * 1024 * 1024,
-        sjdbOverhang = config['sjdbOverhang'],
-        soloCellFilter = config['soloCellFilter']
-    shell:
-        """
-        rm -rf {params.tmp}
-        mkdir -p {params.path} 
-
-        {params.STAR} --runThreadN {params.threads} \
-          --genomeDir {params.index_path} \
-        --readFilesIn {input.cdna} {input.cbumi} \
-        --outFileNamePrefix {params.path} \
-        --readFilesCommand zcat \
-        --clipAdapterType CellRanger4 \
-        --outSAMtype BAM SortedByCoordinate \
-        --outBAMsortingThreadN {params.threads} \
-        --outSAMattributes NH HI nM AS CR UR CB UB GX GN \
-        --outSAMunmapped Within \
-        --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 \
-        --outFilterMultimapScoreRange 0 --seedSearchStartLmax 30 \
-        --soloCellFilter {params.soloCellFilter} \
-        --soloUMIdedup Exact \
-        --soloMultiMappers Rescue \
-        --soloFeatures Gene GeneFull \
-        --soloAdapterSequence NNNNNNNNNGTGANNNNNNNNNGACA \
-        --soloCBmatchWLtype EditDist_2 \
-        --soloCBwhitelist {input.cb1} {input.cb2} {input.cb3} \
-        --soloType CB_UMI_Complex \
-        --soloUMIlen 8 \
-        --soloCBposition 2_0_2_8 2_13_2_21 3_1_3_9 \
-        --soloUMIposition 3_10_3_17 
-    rm -rf {params.tmp}
-        """
+#         {params.STAR} --runThreadN {params.threads} \
+#           --genomeDir {params.index_path} \
+#         --readFilesIn {input.cdna} {input.cbumi} \
+#         --outFileNamePrefix {params.path} \
+#         --readFilesCommand zcat \
+#         --clipAdapterType CellRanger4 \
+#         --outSAMtype BAM SortedByCoordinate \
+#         --outBAMsortingThreadN {params.threads} \
+#         --outSAMattributes NH HI nM AS CR UR CB UB GX GN \
+#         --outSAMunmapped Within \
+#         --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 \
+#         --outFilterMultimapScoreRange 0 --seedSearchStartLmax 30 \
+#         --soloCellFilter {params.soloCellFilter} \
+#         --soloUMIdedup Exact \
+#         --soloMultiMappers Rescue \
+#         --soloFeatures Gene GeneFull \
+#         --soloAdapterSequence NNNNNNNNNGTGANNNNNNNNNGACA \
+#         --soloCBmatchWLtype EditDist_2 \
+#         --soloCBwhitelist {input.cb1} {input.cb2} {input.cb3} \
+#         --soloType CB_UMI_Complex \
+#         --soloUMIlen 8 \
+#         --soloCBposition 2_0_2_8 2_13_2_21 3_1_3_9 \
+#         --soloUMIposition 3_10_3_17 
+#     rm -rf {params.tmp}
+#         """

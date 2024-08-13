@@ -13,6 +13,8 @@ dependencies:
   - bioconda::htslib
   - bioconda::samtools
   - bioconda::star=2.7.11b
+  - bioconda::cutadapt=v4.9
+  - conda-forge:pigz
   ## - conda-forge::r-base=4.2.2
   ## - bioconda::bioconductor-biocgenerics=0.44.0
   ## - conda-forge::r-biocmanager=1.30.22
