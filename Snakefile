@@ -29,14 +29,17 @@ print(get_sample_names())
 
 rule all:
     input:
-        op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html'),
-        # 'pbmc_rustody',
-        # expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
-               # sample = get_sample_names()),
-        # op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
-        expand(op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
-               sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+        # op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html'),
+        # # 'pbmc_rustody',
+        # # expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+        #        # sample = get_sample_names()),
+        # # op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
+        # expand(op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
+        #        sample = get_sample_names()),
+        # expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+        #        sample = get_sample_names()),
+        op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
+        expand(op.join(config['working_dir'], 'align_alevin', '{sample}', 'done'),
                sample = get_sample_names())
 
 
@@ -369,7 +372,8 @@ rule standardize_cb_umis_cutadapt:
     input:
         cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)
     output:
-        standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz")
+        standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq',
+                                      "{sample}_standardized_cb_umi.fq.gz")
     params:
         path = op.join(config['working_dir'], 'data', 'fastq')
     threads:
@@ -531,7 +535,76 @@ rule align_star_sampletags:
           --seedSearchStartLmax 30 \
           --alignIntronMax 1 &> {log}
         """
+       
+rule salmon_index:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        transcriptome = config['transcriptome']
+    output:
+        index_flag = op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin')
+    params:
+        index_path = op.join(config['working_dir'], 'data', 'index', 'salmon')
+    threads: workflow.cores    
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'alevin_index.log')
+    shell:
+        """
+        mkdir -p {params.index_path}
+        salmon index -t {input.transcriptome} -i {params.index_path} -p {threads}
+        """
+
+rule get_txp2gene:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        genes_gtf = config['gtf']
+    output:
+        op.join(config['working_dir'], 'data', 'index', 'salmon', 'txp2gene')
+    shell:
+         """
+         cat {input.genes_gtf} | \
+           grep transcript | awk '{{print $12,$10}}' | sed -e 's|"||g' -e 's|;||g' | uniq > {output}
+         """
+         
     
+rule alevin_align:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        index_flag = op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
+        standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq',
+                                      "{sample}_standardized_cb_umi.fq.gz"),
+        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        t2g = op.join(config['working_dir'], 'data', 'index', 'salmon', 'txp2gene')
+    params:
+        index_path =  op.join(config['working_dir'], 'data', 'index', 'salmon'),
+        output_dir = op.join(config['working_dir'], 'align_alevin', '{sample}')
+    output:
+        flag = op.join(config['working_dir'], 'align_alevin', '{sample}', 'done')
+    threads:
+        workflow.cores      
+    log:
+        op.join(config['working_dir'], 'log', 'alevin_{sample}_align.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'alevin_{sample}_align.log')
+    shell:
+        """
+        salmon alevin -i {params.index_path} \
+           -l ISR \
+           -1 {input.standardized_cb_umi} \
+           -2 {input.cdna} \
+           --bc-geometry '1[1-27]' \
+           --read-geometry '2[1-end]' \
+           --umi-geometry '1[28-35]' \
+           -o {params.output_dir} \
+           -p {threads} \
+           --tgMap {input.t2g} &> {log}
+
+        touch {output.flag} ## todo fixme
+        """
+
+        
 # # https://github.com/s-shichino1989/TASSeq_EnhancedBeads/blob/e48fd2c2fd5a23d622f03e206b8fbe87772fd57f/shell_scripts/Rhapsody_STARsolo.sh#L18
 # rule starsolo_wta_tasseq_style:
 #     conda:
