@@ -30,16 +30,18 @@ print(get_sample_names())
 rule all:
     input:
         # op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html'),
-        # # 'pbmc_rustody',
-        # # expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
-        #        # sample = get_sample_names()),
-        # # op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
+        # 'pbmc_rustody',
+        # expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+               # sample = get_sample_names()),
+        # op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
         # expand(op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
         #        sample = get_sample_names()),
-        # expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-        #        sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+               sample = get_sample_names()),
         op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
         expand(op.join(config['working_dir'], 'align_alevin', '{sample}', 'done'),
+               sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
                sample = get_sample_names())
 
 
@@ -546,12 +548,14 @@ rule salmon_index:
     params:
         index_path = op.join(config['working_dir'], 'data', 'index', 'salmon')
     threads: workflow.cores    
+    log:
+        op.join(config['working_dir'], 'logs', 'alevin_index.log')
     benchmark:
         op.join(config['working_dir'], 'benchmarks', 'alevin_index.log')
     shell:
         """
         mkdir -p {params.index_path}
-        salmon index -t {input.transcriptome} -i {params.index_path} -p {threads}
+        salmon index -t {input.transcriptome} -i {params.index_path} -p {threads} &> {log}
         """
 
 rule get_txp2gene:
