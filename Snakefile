@@ -33,8 +33,8 @@ rule all:
                sample = get_sample_names()),
         expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
                sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'rustody', '{sample}', 'flag'),
-               sample = get_sample_names()),
+        # expand(op.join(config['working_dir'], 'rustody', '{sample}', 'flag'),
+        #        sample = get_sample_names()),
         expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'sampletag_counts.tsv.gz'),
                sample = get_sample_names())
 
@@ -534,6 +534,8 @@ rule align_star_sampletags:
           # --outFilterScoreMinOverLread 0.5 \
           # --outFilterMatchNminOverLread 0.5 \
           --outFilterMismatchNmax 5 \
+          --scoreInsOpen  -8 \
+          --scoreDelBase -8 \
           # --seedSearchStartLmax 30 \
           --alignIntronMax 1 &> {log}
 
@@ -558,8 +560,7 @@ rule count_sampletags:
         ## this only reports a table with as many rows as `cb,umi,sampletag,cigar` alignments. Not summarized
         ##  at all 
         samtools view -@ {threads} /home/imallona/noname/bd/sampletags/bd/Aligned.out.bam | \
-          cut -f1,3,6 | \ 
-          sed 's/__/\t/g' | pigz -p {threads} -c > {output.counts}
+          cut -f1,3,6 | sed 's/__/\t/g' | pigz -p {threads} -c > {output.counts}
         """
         
 rule salmon_index:

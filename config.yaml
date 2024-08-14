@@ -12,7 +12,7 @@ max_mem_mb: 20000 ## these are megabytes
 
 ## cell filtering
 # soloCellFilter: "EmptyDrops_CR" # None, TopCells, CellRanger2.2
-soloCellFilter: "TopCells 500" # None, TopCells, CellRanger2.2
+soloCellFilter: "TopCells 3000" # None, TopCells, CellRanger2.2
 
 ## multimappers
 soloMultiMappers: "Unique" # Uniform, Rescue , PropUnique, EM
