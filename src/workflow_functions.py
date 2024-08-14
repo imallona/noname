@@ -10,7 +10,7 @@
 def get_sample_names():
     return([x['name'] for x in config['samples']])
 
-
+## name means sample name, everywhere
 def get_cbumi_by_name(name):
     for i in range(len(config['samples'])):
         if config['samples'][i]['name'] == name:
@@ -39,7 +39,14 @@ def get_species_by_name(name):
                  return(species)
              else:
                  raise('Unknown species (not mouse nor human), it was reported ' + species)
-
+             
+# def get_sampletags_fasta_by_name(name):
+#     for i in range(len(config['samples'])):
+#         if config['samples'][i]['name'] == name:
+#             species = config['samples'][i]['uses']['species']
+#             return op.join('data', 'sampletags', species + '_sampletags.fa')
+            
+             
 def get_chromosomes(wildcards):
     # with open(op.join(config['working_dir'], 'data', 'chrom.sizes')) as fh:
     # with open(chromsizes_fn) as fh:
@@ -47,25 +54,25 @@ def get_chromosomes(wildcards):
     with open(fn) as fh:
         return(list(line.strip().split('\t')[0] for line in fh))
 
-def list_by_chr_dedup_bams(wildcards):
-    chroms = get_chromosomes(wildcards)
-    return(chrom + '_cb_umi_deduped.bam' for chrom in chroms)
+# def list_by_chr_dedup_bams(wildcards):
+#     chroms = get_chromosomes(wildcards)
+#     return(chrom + '_cb_umi_deduped.bam' for chrom in chroms)
 
 ## bd offers a couple of sets of whitelists, so we fetch the right one according to the config.yaml file
 def symlink_whitelist(sample):
-    os.makedirs(op.join(config['working_dir'], 'align_wta'), exist_ok = True)
+    os.makedirs(op.join(config['working_dir'], 'starsolo_wta'), exist_ok = True)
                 
     if get_barcode_whitelist_by_name(name = sample) == '96x3':
         for x in ['BD_CLS1.txt', 'BD_CLS2.txt', 'BD_CLS3.txt']:
             try:
                 os.symlink(src = op.join(config['repo_path'], 'data', 'whitelist_96x3', x),
-                           dst = op.join(config['working_dir'], 'align_wta', sample, 'whitelists', x))
+                           dst = op.join(config['working_dir'], 'starsolo_wta', sample, 'whitelists', x))
             except FileExistsError:
                 break
     elif get_barcode_whitelist_by_name(name = sample) == '384x3':
         for x in ['BD_CLS1.txt', 'BD_CLS2.txt', 'BD_CLS3.txt']:
             try:
                 os.symlink(src = op.join(config['repo_path'], 'data', 'whitelist_384x3', x),
-                           dst = op.join(config['working_dir'], 'align_wta', sample, 'whitelists', x))
+                           dst = op.join(config['working_dir'], 'starsolo_wta', sample, 'whitelists', x))
             except FileExistsError:
                 break
