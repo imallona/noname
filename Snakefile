@@ -25,26 +25,19 @@ os.makedirs(op.join(config['working_dir'], 'benchmarks'), exist_ok=True)
 
 print(get_sample_names())
 
-
-
 rule all:
     input:
         # op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html'),
-        # 'pbmc_rustody',
-        # expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
-               # sample = get_sample_names()),
-        # op.join(config['working_dir'] , 'data', 'mouse_index', 'sampletags', 'SAindex'),
-        # expand(op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
-        #        sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-               sample = get_sample_names()),
         op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
-        expand(op.join(config['working_dir'], 'align_alevin', '{sample}', 'done'),
+        expand(op.join(config['working_dir'], 'align_alevin', '{sample}', 'alevin', 'quants_mat.gz'),
                sample = get_sample_names()),
         expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+               sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'rustody', '{sample}', 'flag'),
+               sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'sampletag_counts.tsv.gz'),
                sample = get_sample_names())
 
-        
 rule star_index:
     conda:
         op.join('envs', 'all_in_one.yaml')
@@ -108,8 +101,8 @@ rule starsolo_wta:
         cb3 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
     output:
         bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-        filtered_barcodes = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out', 'Gene',
-                                    'filtered', 'matrix.mtx')
+        raw_count_table = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out', 'Gene',
+                                  'raw', 'matrix.mtx')
     threads:
         workflow.cores
     log:
@@ -212,13 +205,14 @@ rule install_r_deps:
         {params.Rbin} -q --no-save --no-restore --slave \
              -f {input.script} &> {log}
          """
-        
+
+# todo fixme so it gets the filtered mtx
 rule generate_sce:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        wta_filtered = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out',
-                               'Gene', 'filtered', 'matrix.mtx'),
+        raw  = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out',
+                               'Gene', 'raw', 'matrix.mtx'),
         # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
@@ -321,7 +315,7 @@ rule install_rustody:
         cargo build --release 2> {log}
         """
         
-rule rustody_CAUTIONMAXREADS:
+rule rustody_run:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
@@ -330,7 +324,7 @@ rule rustody_CAUTIONMAXREADS:
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)        
     output:
-        flag = '{sample}_rustody'
+        flag = op.join(config['working_dir'], 'rustody', '{sample}', 'flag')
     threads:
         workflow.cores
     params:
@@ -361,8 +355,7 @@ rule rustody_CAUTIONMAXREADS:
            --num-threads {threads} \
            --file {input.cdna} \
            --expression {input.transcriptome} \
-           --min-umi 1 \
-           --max-reads 100000 $ > {log}
+           --min-umi 1 &> {log}
 
         touch {output.flag}
         """
@@ -474,14 +467,14 @@ rule extract_unmapped_startsolo_wta_tagged_fastqs:
     input:
         bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam')
     output:
-        temp(op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_unmapped_tagged.fq.gz'))
+        temp(op.join(config['working_dir'], 'sampletags', '{sample}_unmapped_tagged.fq.gz'))
     threads:
         1        
     benchmark:
         op.join(config['working_dir'], 'benchmarks', '{sample}_unaligned_tagged.log')
     shell:
         """
-        samtools view {input.bam} | \
+        samtools view -@ {threads} {input.bam} | \
              awk -F " " '{{print "@"$22"__"$23"\\n"$10"\\n""+""\\n"$11}}' | \
              pigz -c > {output}
         """
@@ -491,9 +484,9 @@ rule extract_sampletagslooking_fastqs:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        fq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_unmapped_tagged.fq.gz')
+        fq = op.join(config['working_dir'], 'sampletags', '{sample}_unmapped_tagged.fq.gz')
     output:
-        fq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_sampletag_tagged.fq.gz')
+        fq = temp(op.join(config['working_dir'], 'sampletags', '{sample}_sampletag_tagged.fq.gz'))
     threads:
         workflow.cores
     log:
@@ -508,38 +501,67 @@ rule extract_sampletagslooking_fastqs:
         """
         
 rule align_star_sampletags:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
     input:
         # fastq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_unmapped_tagged.fq.gz')
-        fastq = op.join(config['working_dir'], 'sampletags', '{sample}', '{sample}_sampletag_tagged.fq.gz'),
+        fastq = op.join(config['working_dir'], 'sampletags', '{sample}_sampletag_tagged.fq.gz'),
         idx_flag = op.join(config['working_dir'] , 'data', species + '_index', 'sampletags', 'SAindex')
     output:
-        bam = op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.sortedByCoord.out.bam')
+        bam = op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.out.bam')
     params:
         output_dir = op.join(config['working_dir'], 'sampletags', '{sample}/'),
-        sampletags_genome_dir = op.join(config['working_dir'] , 'data', species + '_index', 'sampletags')
+        sampletags_genome_dir = op.join(config['working_dir'] , 'data', species + '_index', 'sampletags'),
+        tmp = op.join(config['working_dir'], 'sampletags', 'tmp_starsolo_wta_{sample}'),
     log:
         op.join(config['working_dir'], 'logs', '{sample}_align_sampletags_star.log')
     benchmark:
         op.join(config['working_dir'], 'benchmarks', '{sample}_align_sampletags_star.txt')
     threads:
-        workflow.cores
+        min(10, workflow.cores)
     shell:
         """
+        rm -rf {params.tmp} {params.output_dir}
+        mkdir -p {params.output_dir} 
+        
         STAR --runThreadN {threads} \
           --genomeDir {params.sampletags_genome_dir} \
+          --outTmpDir {params.tmp} \
           --readFilesCommand zcat \
           --outFileNamePrefix {params.output_dir} \
           --readFilesIn {input.fastq}  \
-          --outSAMtype BAM SortedByCoordinate \
-         # --quantMode GeneCounts \
-         # --sjdbGTFfile genomes/sampletags.gtf \
-          --outFilterScoreMinOverLread 0.5 \
-          --outFilterMatchNminOverLread 0.5 \
-          --outFilterMismatchNmax 25 \
-          --seedSearchStartLmax 30 \
+          --outSAMtype BAM Unsorted \
+          # --outFilterScoreMinOverLread 0.5 \
+          # --outFilterMatchNminOverLread 0.5 \
+          --outFilterMismatchNmax 5 \
+          # --seedSearchStartLmax 30 \
           --alignIntronMax 1 &> {log}
+
+        rm -rf {params.tmp}
         """
-       
+
+rule count_sampletags:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        bam = op.join(config['working_dir'], 'sampletags', '{sample}', 'Aligned.out.bam')
+    output:
+        counts = op.join(config['working_dir'], 'sampletags', '{sample}', 'sampletag_counts.tsv.gz')
+    log:
+        op.join(config['working_dir'], 'logs', '{sample}_sampletag_counting.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', '{sample}_sampletag_counting.txt')
+    threads:
+        min(10, workflow.cores)
+    shell:
+        """
+        ## this only reports a table with as many rows as `cb,umi,sampletag,cigar` alignments. Not summarized
+        ##  at all 
+        samtools view -@ {threads} /home/imallona/noname/bd/sampletags/bd/Aligned.out.bam | \
+          cut -f1,3,6 | \ 
+          sed 's/__/\t/g' | pigz -p {threads} -c > {output.counts}
+        """
+        
 rule salmon_index:
     conda:
         op.join('envs', 'all_in_one.yaml')
@@ -624,7 +646,7 @@ rule alevin_align:
         index_path =  op.join(config['working_dir'], 'data', 'index', 'salmon'),
         output_dir = op.join(config['working_dir'], 'align_alevin', '{sample}')
     output:
-        flag = op.join(config['working_dir'], 'align_alevin', '{sample}', 'done')
+        flag = op.join(config['working_dir'], 'align_alevin', '{sample}', 'alevin', 'quants_mat.gz')
     threads:
         workflow.cores      
     log:
@@ -644,7 +666,6 @@ rule alevin_align:
            -p {threads} \
            --tgMap {input.t2g} &> {log}
 
-        touch {output.flag} ## todo fixme
         """
 
         
