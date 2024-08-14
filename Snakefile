@@ -473,7 +473,9 @@ rule bustools_count:
 
 for sample in get_sample_names():
     species = get_species_by_name(name = sample)
-    rule star_index_sampletags:
+    rule:
+        name:
+            f"{species}_star_index_sampletags"
         conda:
             op.join('envs', 'all_in_one.yaml')
         input:
@@ -496,7 +498,7 @@ for sample in get_sample_names():
             --genomeDir {params.output_dir} \
             --genomeFastaFiles {input.fa} &> {log}
             """
-
+        
 rule extract_unmapped_startsolo_wta_tagged_fastqs:
     conda:
         op.join('envs', 'all_in_one.yaml')
