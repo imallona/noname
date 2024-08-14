@@ -31,7 +31,7 @@ rule all:
         op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
         expand(op.join(config['working_dir'], 'align_alevin', '{sample}', 'alevin', 'quants_mat.gz'),
                sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+        expand(op.join(config['working_dir'], 'bustools', '{sample}', 'output.mtx'),
                sample = get_sample_names()),
         # expand(op.join(config['working_dir'], 'rustody', '{sample}', 'flag'),
         #        sample = get_sample_names()),
@@ -418,10 +418,14 @@ rule kallisto_bus:
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
         kallisto_index = op.join(config['working_dir'], 'data', 'index', 'kallisto', 'kallisto.index'),
     output:
-        op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec')
+        matrix_ec = op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+        transcripts = op.join(config['working_dir'], 'kallisto', '{sample}', 'transcripts.txt'),
+        bus = op.join(config['working_dir'], 'kallisto', '{sample}', 'output.bus')
     params:
         output_dir = op.join(config['working_dir'], 'kallisto', '{sample}')
     threads: workflow.cores
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', '{sample}_kallisto_bus.txt')
     log:
         op.join(config['working_dir'], 'logs', '{sample}_kallisto_bus.log')
     shell:
@@ -433,6 +437,38 @@ rule kallisto_bus:
             {input.standardized_cb_umi} {input.cdna} &> {log}
         """
 
+rule bustools_count:
+    conda:
+        op.join('envs', 'kallisto.yaml')
+    input:
+        txp2gene = op.join(config['working_dir'], 'data', 'index', 'salmon', 'txp2gene'),
+        matrix_ec = op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+        transcripts = op.join(config['working_dir'], 'kallisto', '{sample}', 'transcripts.txt'),
+        bus = op.join(config['working_dir'], 'kallisto', '{sample}', 'output.bus')
+    output:
+        op.join(config['working_dir'], 'bustools', '{sample}', 'output.mtx')
+    params:
+        output_dir = op.join(config['working_dir'], 'bustools', '{sample}/')
+    threads: 1
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', '{sample}_bustools_count.txt')
+    log:
+        op.join(config['working_dir'], 'logs', '{sample}_bustools_count.log')
+    shell:
+        """
+        mkdir -p {params.output_dir}
+        cd {params.output_dir}
+        bustools count \
+           -o {params.output_dir} \
+           -g {input.txp2gene} \
+           -e {input.matrix_ec} \
+           -t {input.transcripts} \
+           --genecounts \
+           {input.bus} &> {log}
+        """
+        
+
+        
 ## from https://github.com/imallona/rock_roi_paper/blob/imallona/03_leukemia/02_sampletags_again.sh
 
 for sample in get_sample_names():

@@ -5,3 +5,4 @@ channels:
   - nodefaults
 dependencies:
   - bioconda::kallisto=0.51.0
+  - bioconda::bustools
