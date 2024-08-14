@@ -1,6 +1,3 @@
-## simulate: True generates fake data and runs the pipeline
-simulate: True
-
 ## software stack, will work out of the box if within the supplied docker container
 Rbin: R
 STAR: STAR
@@ -10,6 +7,8 @@ repo_path: '.'
 ## run limits
 nthreads: 50
 max_mem_mb: 20000 ## these are megabytes
+
+# downsampled: 50000000 # or 0
 
 ## cell filtering
 soloCellFilter: "EmptyDrops_CR" # None, TopCells, CellRanger2.2
@@ -21,23 +20,30 @@ soloMultiMappers: "Unique" # Uniform, Rescue , PropUnique, EM
 extraStarSoloArgs: ""
 
 ## full, absolute path where outputs will be generated at
-working_dir: /home/imallona/src/noname/work
+working_dir: /home/imallona/noname/bd/
 
-# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.primary_assembly.annotation.gtf.gz
-# caution uncompressed
-gtf: data/gencode.vM35.primary_assembly.annotation.gtf
-# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/GRCm39.primary_assembly.genome.fa.gz
-# caution uncompressed
-genome: data/GRCm39.primary_assembly.genome.fa
-## https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.pc_transcripts.fa.gz
-transcriptome: data/gencode.vM35.pc_transcripts.fa.gz
+# whether from ensembl or gencode; formats differ slightly
+gtf_origin: 'ensembl' # or 'gencode'
 
-sjdbOverhang: 61
+# genes annotation
+# https://ftp.ensembl.org/pub/release-112/gtf/homo_sapiens/Homo_sapiens.GRCh38.112.gtf.gz
+gtf: /home/gmoro/genome/Homo_sapiens.GRCh38.112.gtf
+
+# genome seq
+# https://ftp.ensembl.org/pub/release-112/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa.gz
+genome: /home/gmoro/genome/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa
+
+# cDNAs seq
+# https://ftp.ensembl.org/pub/release-112/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
+transcriptome: /home/gmoro/genome/Homo_sapiens.GRCh38.cdna.all.fa.gz 
+
+# cDNA read length minus 1
+sjdbOverhang: 70
 
 samples:
-  - name: pbmc
+  - name: bd
     uses:
-      cb_umi_fq: data/325411_1-Unmod_WTA_S1_R1_001_downsampled_100M.fq.gz
-      cdna_fq:   data/325411_1-Unmod_WTA_S1_R2_001_downsampled_100M.fq.gz
+      cb_umi_fq: /home/gmoro/concatenated_bd_demo/WTA_SMK_R1.fastq.gz
+      cdna_fq: /home/gmoro/concatenated_bd_demo/WTA_SMK_R2.fastq.gz
       whitelist: 384x3
-      species: 'mouse'
+      species: 'human'

@@ -44,7 +44,7 @@ rule all:
         expand(op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
                sample = get_sample_names())
 
-
+        
 rule star_index:
     conda:
         op.join('envs', 'all_in_one.yaml')
@@ -56,12 +56,11 @@ rule star_index:
     threads:
         config['nthreads']
     params:
-        simulate = config['simulate'],
         processing_path = op.join(config['working_dir'], 'data'),
         nthreads = config['nthreads'],
         star = config['STAR'],
         sjdbOverhang = config['sjdbOverhang'],
-        indexNbases = 4 if config['simulate'] else 14
+        indexNbases = 14
     log:
         op.join(config['working_dir'], 'logs', 'star_indexing.log')
     benchmark:
@@ -522,6 +521,8 @@ rule align_star_sampletags:
         op.join(config['working_dir'], 'logs', '{sample}_align_sampletags_star.log')
     benchmark:
         op.join(config['working_dir'], 'benchmarks', '{sample}_align_sampletags_star.txt')
+    threads:
+        workflow.cores
     shell:
         """
         STAR --runThreadN {threads} \
@@ -566,13 +567,25 @@ rule get_txp2gene:
         genes_gtf = config['gtf']
     output:
         op.join(config['working_dir'], 'data', 'index', 'salmon', 'txp2gene')
+    params:
+        gtf_style = config['gtf_origin'] 
     shell:
          """
-         cat {input.genes_gtf} | \
-           grep transcript | awk '{{print $12,$10}}' | sed -e 's|"||g' -e 's|;||g' | uniq > {output}
+         if [[ {params.gtf_style} == 'ensembl' ]]
+         then
+            echo "Ensembl GTF"
+            grep transcript {input.genes_gtf} | \
+                 awk '{{print $14,$10}}' | sed -e 's|"||g' -e 's|;||g' | uniq > {output}
+         elif [[ {params.gtf_style} == 'gencode' ]]
+         then
+            echo "Gencode GTF"
+            grep transcript {input.genes_gtf} | \
+                 awk '{{print $12,$10}}' | sed -e 's|"||g' -e 's|;||g' | uniq > {output}
+         else
+           echo "gtf_origin is misspecified within the config file"
+         fi         
          """
          
-    
 rule alevin_align:
     conda:
         op.join('envs', 'all_in_one.yaml')

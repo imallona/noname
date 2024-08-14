@@ -54,9 +54,9 @@ def get_chromosomes(wildcards):
     with open(fn) as fh:
         return(list(line.strip().split('\t')[0] for line in fh))
 
-def list_by_chr_dedup_bams(wildcards):
-    chroms = get_chromosomes(wildcards)
-    return(chrom + '_cb_umi_deduped.bam' for chrom in chroms)
+# def list_by_chr_dedup_bams(wildcards):
+#     chroms = get_chromosomes(wildcards)
+#     return(chrom + '_cb_umi_deduped.bam' for chrom in chroms)
 
 ## bd offers a couple of sets of whitelists, so we fetch the right one according to the config.yaml file
 def symlink_whitelist(sample):
