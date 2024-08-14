@@ -52,11 +52,11 @@ rule star_index:
         gtf = config['gtf'],
         fa = config['genome']
     output:
-        index_path =  op.join(config['working_dir'] , 'data', 'index', 'SAindex')
+        index_path =  op.join(config['working_dir'] , 'data', 'index', 'star', 'SAindex')
     threads:
         config['nthreads']
     params:
-        processing_path = op.join(config['working_dir'], 'data'),
+        processing_path = op.join(config['working_dir'], 'data', 'index', 'star/'),
         nthreads = config['nthreads'],
         star = config['STAR'],
         sjdbOverhang = config['sjdbOverhang'],
@@ -73,7 +73,7 @@ rule star_index:
     ({params.star} --runThreadN {params.nthreads} \
      --runMode genomeGenerate \
      --sjdbGTFfile {input.gtf} \
-     --genomeDir {params.processing_path}/index \
+     --genomeDir {params.processing_path} \
      --genomeSAindexNbases {params.indexNbases} \
      --sjdbOverhang {params.sjdbOverhang} \
      --genomeFastaFiles {input.fa} ) 2> {log}
@@ -101,7 +101,7 @@ rule starsolo_wta:
     input:
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
-        index_flag = op.join(config['working_dir'] , 'data', 'index', 'SAindex'),
+        index_flag = op.join(config['working_dir'] , 'data', 'index', 'star', 'SAindex'),
         gtf = config['gtf'],
         cb1 = op.join(config['working_dir'], 'starsolo_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
         cb2 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
@@ -119,7 +119,7 @@ rule starsolo_wta:
     params:
         threads = min(10, workflow.cores),
         path = op.join(config['working_dir'], 'starsolo_wta', "{sample}/"),
-        index_path = op.join(config['working_dir'] , 'data', 'index'),
+        index_path = op.join(config['working_dir'] , 'data', 'index', 'star'),
         STAR = config['STAR'],
         # num_cells = get_expected_cells_by_name("{sample}"),
         tmp = op.join(config['working_dir'], 'tmp_starsolo_wta_{sample}'),
@@ -546,9 +546,11 @@ rule salmon_index:
     input:
         transcriptome = config['transcriptome']
     output:
+        deversioned_fasta = temp(op.join(config['working_dir'], 'data', 'index', 'salmon', 'transcriptome.fa')),
         index_flag = op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin')
     params:
-        index_path = op.join(config['working_dir'], 'data', 'index', 'salmon')
+        index_path = op.join(config['working_dir'], 'data', 'index', 'salmon'),
+        gtf_style = config['gtf_origin']
     threads: workflow.cores    
     log:
         op.join(config['working_dir'], 'logs', 'alevin_index.log')
@@ -557,7 +559,30 @@ rule salmon_index:
     shell:
         """
         mkdir -p {params.index_path}
-        salmon index -t {input.transcriptome} -i {params.index_path} -p {threads} &> {log}
+
+         if [[ {params.gtf_style} == 'ensembl' ]]
+         then
+            echo "Ensembl GTF"
+
+            # no transcript versions
+            #  e.g. ENST4654.1, the .1 needs to go because the matching GTF doesn't have it
+            zcat {input.transcriptome} | awk 'FS="." {{print $1}}' > {output.deversioned_fasta}
+
+         elif [[ {params.gtf_style} == 'gencode' ]]
+         then
+            echo "Gencode GTF"
+            ## yes versions, no pipes
+            zcat {input.transcriptome} | sed 's/|/ /g' > {output.deversioned_fasta}
+
+         else
+           echo "gtf_origin is misspecified within the config file"
+         fi 
+
+        salmon index -t {output.deversioned_fasta} -i {params.index_path} -p {threads} &> {log}
+
+
+ 
+        
         """
 
 rule get_txp2gene:

@@ -1,6 +1,6 @@
 # Aim
 
-This project has no name.
+Rhapsodist is a Snakemake workflow to process BD Rhapsody (enhanced beads) data.
 
 ## Contributors
 

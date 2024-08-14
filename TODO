@@ -1,1 +1,4 @@
-- everything
+- fixme
+  - kallisto's conda is broken, document the compilation workaround
+- documentation
+
