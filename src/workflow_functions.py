@@ -10,6 +10,9 @@
 def get_sample_names():
     return([x['name'] for x in config['samples']])
 
+def get_aligners():
+    return(config['aligner'])
+
 ## name means sample name, everywhere
 def get_cbumi_by_name(name):
     for i in range(len(config['samples'])):
@@ -60,19 +63,19 @@ def get_chromosomes(wildcards):
 
 ## bd offers a couple of sets of whitelists, so we fetch the right one according to the config.yaml file
 def symlink_whitelist(sample):
-    os.makedirs(op.join(config['working_dir'], 'starsolo_wta'), exist_ok = True)
+    os.makedirs(op.join(config['working_dir'], 'starsolo'), exist_ok = True)
                 
     if get_barcode_whitelist_by_name(name = sample) == '96x3':
         for x in ['BD_CLS1.txt', 'BD_CLS2.txt', 'BD_CLS3.txt']:
             try:
                 os.symlink(src = op.join(config['repo_path'], 'data', 'whitelist_96x3', x),
-                           dst = op.join(config['working_dir'], 'starsolo_wta', sample, 'whitelists', x))
+                           dst = op.join(config['working_dir'], 'starsolo', sample, 'whitelists', x))
             except FileExistsError:
                 break
     elif get_barcode_whitelist_by_name(name = sample) == '384x3':
         for x in ['BD_CLS1.txt', 'BD_CLS2.txt', 'BD_CLS3.txt']:
             try:
                 os.symlink(src = op.join(config['repo_path'], 'data', 'whitelist_384x3', x),
-                           dst = op.join(config['working_dir'], 'starsolo_wta', sample, 'whitelists', x))
+                           dst = op.join(config['working_dir'], 'starsolo', sample, 'whitelists', x))
             except FileExistsError:
                 break

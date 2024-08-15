@@ -21,22 +21,7 @@ soloMultiMappers: "Unique" # Uniform, Rescue , PropUnique, EM
 extraStarSoloArgs: ""
 
 ## full, absolute path where outputs will be generated at
-working_dir: /home/imallona/noname/bd/
-
-# # whether from ensembl or gencode; formats differ slightly
-# gtf_origin: 'ensembl' # or 'gencode'
-
-# genes annotation
-# # https://ftp.ensembl.org/pub/release-112/gtf/homo_sapiens/Homo_sapiens.GRCh38.112.gtf.gz
-# gtf: /home/gmoro/genome/Homo_sapiens.GRCh38.112.gtf
-
-# genome seq
-# # https://ftp.ensembl.org/pub/release-112/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa.gz
-# genome: /home/gmoro/genome/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa
-
-# cDNAs seq
-# # https://ftp.ensembl.org/pub/release-112/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
-# transcriptome: /home/gmoro/genome/Homo_sapiens.GRCh38.cdna.all.fa.gz 
+working_dir: /home/imallona/noname/test_run/
 
 
 gtf_origin: "gencode"
@@ -53,8 +38,11 @@ transcriptome: /home/imallona/src/noname/data/gencode.vM35.pc_transcripts.fa.gz
 # cDNA read length minus 1
 sjdbOverhang: 70
 
+# aligner: ['starsolo']
+aligner: ['starsolo', 'kallisto', 'alevin']
+      
 samples:
-  - name: bd
+  - name: example_50M
     uses:
       # cb_umi_fq: /home/gmoro/concatenated_bd_demo/WTA_SMK_R1.fastq.gz
       # cdna_fq: /home/gmoro/concatenated_bd_demo/WTA_SMK_R2.fastq.gz
@@ -62,9 +50,10 @@ samples:
       cdna_fq: /home/gmoro/concatenated_bd_demo/combined_50M_R2_WTA_SMK.fastq.gz
       whitelist: 384x3
       species: 'human'
-  - name: only_sampletags
-    uses:
-      cb_umi_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/12SMK_S1_L432_R1_001.fastq.gz"
-      cdna_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/12SMK_S1_L432_R2_001.fastq.gz"
-      whitelist: 384x3
-      species: 'human'
+
+  # - name: only_sampletags
+  #   uses:
+  #     cb_umi_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/12SMK_S1_L432_R1_001.fastq.gz"
+  #     cdna_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/12SMK_S1_L432_R2_001.fastq.gz"
+  #     whitelist: 384x3
+  #     species: 'human'

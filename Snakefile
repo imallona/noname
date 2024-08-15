@@ -27,20 +27,21 @@ print(get_sample_names())
 
 rule all:
     input:
-        # op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html'),
-        op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
-        expand(op.join(config['working_dir'], 'align_alevin', '{sample}', 'alevin', 'quants_mat.gz'),
-               sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'bustools', '{sample}', 'output.mtx'),
-               sample = get_sample_names()),
+        expand(op.join(config['working_dir'], '{aligner}', 'descriptive_report.html'),
+               aligner = get_aligners()),               
+        # op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
+        # expand(op.join(config['working_dir'], 'alevin', '{sample}', 'alevin', 'quants_mat.gz'),
+        #        sample = get_sample_names()),
+        # expand(op.join(config['working_dir'], 'bustools', '{sample}', 'output.mtx'),
+               # sample = get_sample_names()),
         # expand(op.join(config['working_dir'], 'rustody', '{sample}', 'flag'),
         #        sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'sampletag_counts.tsv.gz'),
-               sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_kallisto_sce.rds'),
-               sample = get_sample_names()),
-        expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_alevin_sce.rds'),
-               sample = get_sample_names())
+        # expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'sampletag_counts.tsv.gz'),
+        #        sample = get_sample_names()),
+        # expand(op.join(config['working_dir'], 'starsolo', '{sample}', '{sample}_kallisto_sce.rds'),
+        #        sample = get_sample_names()),
+        # expand(op.join(config['working_dir'], 'starsolo', '{sample}', '{sample}_starsolo_sce.rds'),
+        #        sample = get_sample_names())
 
 rule star_index:
     conda:
@@ -84,15 +85,15 @@ rule prepare_whitelists:
         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample)
     output:
-        cb1 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS1.txt'),
-        cb2 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-        cb3 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
+        cb1 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS1.txt'),
+        cb2 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+        cb3 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS3.txt')
     run:
         sample = wildcards.sample
         symlink_whitelist(sample)
 
 
-rule starsolo_wta:
+rule starsolo:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
@@ -100,12 +101,12 @@ rule starsolo_wta:
         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
         index_flag = op.join(config['working_dir'] , 'data', 'index', 'star', 'SAindex'),
         gtf = config['gtf'],
-        cb1 = op.join(config['working_dir'], 'starsolo_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
-        cb2 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-        cb3 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
+        cb1 = op.join(config['working_dir'], 'starsolo', "{sample}",  'whitelists', 'BD_CLS1.txt'),
+        cb2 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+        cb3 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS3.txt')
     output:
-        bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-        raw_count_table = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out', 'Gene',
+        bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+        raw_count_table = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out', 'Gene',
                                   'raw', 'matrix.mtx')
     threads:
         workflow.cores
@@ -115,11 +116,11 @@ rule starsolo_wta:
         op.join(config['working_dir'], 'benchmarks', 'star_{sample}.txt')
     params:
         threads = min(10, workflow.cores),
-        path = op.join(config['working_dir'], 'starsolo_wta', "{sample}/"),
+        path = op.join(config['working_dir'], 'starsolo', "{sample}/"),
         index_path = op.join(config['working_dir'] , 'data', 'index', 'star'),
         STAR = config['STAR'],
         # num_cells = get_expected_cells_by_name("{sample}"),
-        tmp = op.join(config['working_dir'], 'tmp_starsolo_wta_{sample}'),
+        tmp = op.join(config['working_dir'], 'tmp_starsolo_{sample}'),
         maxmem = config['max_mem_mb'] * 1024 * 1024,
         sjdbOverhang = config['sjdbOverhang'],
         soloCellFilter = config['soloCellFilter'],
@@ -177,9 +178,9 @@ rule starsolo_wta:
 #     conda:
 #         op.join('envs', 'all_in_one.yaml')
 #     input:
-#         bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam')
+#         bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam')
 #     output:
-#         bai = op.join(config['working_dir'], 'starsolo_wta', '{sample}',
+#         bai = op.join(config['working_dir'], 'starsolo', '{sample}',
 #                       'Aligned.sortedByCoord.out.bam.bai')
 #     threads: workflow.cores
 #     shell:
@@ -213,15 +214,15 @@ rule generate_sce_starsolo:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        raw  = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out',
+        raw  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
                                'Gene', 'raw', 'matrix.mtx'),
         # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_sce_star.R'),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
     output:
-        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_star_sce.rds')
+        sce = op.join(config['working_dir'], 'starsolo', '{sample}', '{sample}_starsolo_sce.rds')
     params:
-        align_path = op.join(config['working_dir'], 'starsolo_wta'),
+        align_path = op.join(config['working_dir']),
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
         Rbin = config['Rbin']
@@ -248,7 +249,7 @@ rule generate_sce_kallisto:
         script = op.join(config['repo_path'], 'src', 'generate_sce_kallisto.R'),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
     output:
-        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_kallisto_sce.rds')
+        sce = op.join(config['working_dir'], 'kallisto', '{sample}', '{sample}_kallisto_sce.rds')
     params:
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
@@ -270,13 +271,13 @@ rule generate_sce_alevin:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        raw  = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out',
+        raw  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
                                'Gene', 'raw', 'matrix.mtx'),
         # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_sce_alevin.R'),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
     output:
-        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_alevin_sce.rds')
+        sce = op.join(config['working_dir'], 'alevin', '{sample}', '{sample}_alevin_sce.rds')
     params:
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
@@ -304,7 +305,7 @@ rule generate_sce_alevin:
 #         script = op.join(config['repo_path'], 'src', 'generate_sce.R'),
 #         installs = op.join(config['working_dir'], 'log', 'installs.log')
 #     output:
-#         sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_tasseq_sce.rds')
+#         sce = op.join(config['working_dir'], 'starsolo', '{sample}', '{sample}_tasseq_sce.rds')
 #     params:
 #         align_path = op.join(config['working_dir'], 'tasseq'),
 #         working_dir = config['working_dir'],
@@ -324,23 +325,21 @@ rule render_descriptive_report:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        # mapping_report = op.join(config['working_dir'], 'multimodal', 'mapping_summary.txt'),
-        # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_descriptive_singlecell_report.Rmd'),
-        sces = expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_sce.rds'),
-               sample = get_sample_names()),
+        sces = expand(op.join(config['working_dir'], '{{aligner}}', '{sample}', '{sample}_{{aligner}}_sce.rds'),
+                      sample = get_sample_names()),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
     output:
-        html = op.join(config['working_dir'], 'starsolo_wta', 'descriptive_report.html')
+        html = op.join(config['working_dir'], '{aligner}', 'descriptive_report.html')
         # cache = temp(op.join(config['repo_path'], 'process_sce_objects_cache')),
         # cached_files = temp(op.join(config['repo_path'], 'process_sce_objects_files'))
     log:
-        op.join(config['working_dir'], 'logs', 'descriptive_report.log')
+        op.join(config['working_dir'], 'logs', '{aligner}_descriptive_report.log')
     benchmark:
-        op.join(config['working_dir'], 'benchmarks', 'descriptive_report.log')
+        op.join(config['working_dir'], 'benchmarks', '{aligner}_descriptive_report.txt')
     params:
-        path = op.join(config['working_dir'], 'starsolo_wta'),
-        working_dir = op.join(config['working_dir']),
+        path = op.join(config['working_dir'], '{aligner}'),
+        working_dir = op.join(config['working_dir'], '{aligner}'),
         sample = "{wildcards.sample}",
         Rbin = config['Rbin']
     shell:
@@ -560,7 +559,7 @@ rule extract_unmapped_startsolo_wta_tagged_fastqs:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        bam = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Aligned.sortedByCoord.out.bam')
+        bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam')
     output:
         temp(op.join(config['working_dir'], 'sampletags', '{sample}_unmapped_tagged.fq.gz'))
     threads:
@@ -607,7 +606,7 @@ rule align_star_sampletags:
     params:
         output_dir = op.join(config['working_dir'], 'sampletags', '{sample}/'),
         sampletags_genome_dir = op.join(config['working_dir'] , 'data', species + '_index', 'sampletags'),
-        tmp = op.join(config['working_dir'], 'sampletags', 'tmp_starsolo_wta_{sample}'),
+        tmp = op.join(config['working_dir'], 'sampletags', 'tmp_starsolo_{sample}'),
     log:
         op.join(config['working_dir'], 'logs', '{sample}_align_sampletags_star.log')
     benchmark:
@@ -740,9 +739,9 @@ rule alevin_align:
         t2g = op.join(config['working_dir'], 'data', 'index', 'salmon', 'txp2gene')
     params:
         index_path =  op.join(config['working_dir'], 'data', 'index', 'salmon'),
-        output_dir = op.join(config['working_dir'], 'align_alevin', '{sample}')
+        output_dir = op.join(config['working_dir'], 'alevin', '{sample}')
     output:
-        flag = op.join(config['working_dir'], 'align_alevin', '{sample}', 'alevin', 'quants_mat.gz')
+        flag = op.join(config['working_dir'], 'alevin', '{sample}', 'alevin', 'quants_mat.gz')
     threads:
         workflow.cores      
     log:
@@ -766,7 +765,7 @@ rule alevin_align:
 
         
 # # https://github.com/s-shichino1989/TASSeq_EnhancedBeads/blob/e48fd2c2fd5a23d622f03e206b8fbe87772fd57f/shell_scripts/Rhapsody_STARsolo.sh#L18
-# rule starsolo_wta_tasseq_style:
+# rule starsolo_tasseq_style:
 #     conda:
 #         op.join('envs', 'all_in_one.yaml')
 #     input:
@@ -774,9 +773,9 @@ rule alevin_align:
 #         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
 #         index_flag = op.join(config['working_dir'] , 'data', 'index', 'SAindex'),
 #         gtf = config['gtf'],
-#         cb1 = op.join(config['working_dir'], 'starsolo_wta', "{sample}",  'whitelists', 'BD_CLS1.txt'),
-#         cb2 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-#         cb3 = op.join(config['working_dir'], 'starsolo_wta', "{sample}", 'whitelists', 'BD_CLS3.txt')
+#         cb1 = op.join(config['working_dir'], 'starsolo', "{sample}",  'whitelists', 'BD_CLS1.txt'),
+#         cb2 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+#         cb3 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS3.txt')
 #     output:
 #         bam = op.join(config['working_dir'], 'tasseq', '{sample}', 'Aligned.sortedByCoord.out.bam'),
 #         filtered_barcodes = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out', 'Gene',
