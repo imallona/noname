@@ -36,6 +36,10 @@ rule all:
         # expand(op.join(config['working_dir'], 'rustody', '{sample}', 'flag'),
         #        sample = get_sample_names()),
         expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'sampletag_counts.tsv.gz'),
+               sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_kallisto_sce.rds'),
+               sample = get_sample_names()),
+        expand(op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_alevin_sce.rds'),
                sample = get_sample_names())
 
 rule star_index:
@@ -196,37 +200,35 @@ rule install_r_deps:
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
         Rbin = config['Rbin'],
-    log:
-        op.join(config['working_dir'], 'logs', 'r_install.log')
     benchmark:
         op.join(config['working_dir'], 'benchmarks', 'r_install.txt')
     shell:
         """
         {params.Rbin} -q --no-save --no-restore --slave \
-             -f {input.script} &> {log}
+             -f {input.script} &> {output.log}
          """
 
 # todo fixme so it gets the filtered mtx
-rule generate_sce:
+rule generate_sce_starsolo:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
         raw  = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out',
                                'Gene', 'raw', 'matrix.mtx'),
         # gtf = config['gtf'],
-        script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
+        script = op.join(config['repo_path'], 'src', 'generate_sce_star.R'),
         installs = op.join(config['working_dir'], 'log', 'installs.log')
     output:
-        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_sce.rds')
+        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_star_sce.rds')
     params:
         align_path = op.join(config['working_dir'], 'starsolo_wta'),
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
         Rbin = config['Rbin']
     log:
-        op.join(config['working_dir'], 'logs', 'r_sce_generation_{sample}.log')
+        op.join(config['working_dir'], 'logs', 'r_sce_generation_{sample}_star.log')
     benchmark:
-        op.join(config['working_dir'], 'benchmarks', 'r_sce_generation_{sample}.txt')
+        op.join(config['working_dir'], 'benchmarks', 'r_sce_generation_{sample}_star.txt')
     shell:
         """
         {params.Rbin} -q --no-save --no-restore --slave \
@@ -236,7 +238,62 @@ rule generate_sce:
              --output_fn {output.sce} &> {log}
         """
 
-                
+# todo fixme so it gets the filtered mtx
+rule generate_sce_kallisto:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        raw  = op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+        # gtf = config['gtf'],
+        script = op.join(config['repo_path'], 'src', 'generate_sce_kallisto.R'),
+        installs = op.join(config['working_dir'], 'log', 'installs.log')
+    output:
+        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_kallisto_sce.rds')
+    params:
+        working_dir = config['working_dir'],
+        sample = "{wildcards.sample}",
+        Rbin = config['Rbin']
+    log:
+        op.join(config['working_dir'], 'logs', 'r_sce_generation_{sample}_kallisto.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'r_sce_generation_{sample}_kallisto.txt')
+    shell:
+        """
+        {params.Rbin} -q --no-save --no-restore --slave \
+             -f {input.script} --args \
+             --sample {wildcards.sample} \
+             --working_dir {params.working_dir} \
+             --output_fn {output.sce} &> {log}
+        """
+
+rule generate_sce_alevin:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        raw  = op.join(config['working_dir'], 'starsolo_wta', '{sample}', 'Solo.out',
+                               'Gene', 'raw', 'matrix.mtx'),
+        # gtf = config['gtf'],
+        script = op.join(config['repo_path'], 'src', 'generate_sce_alevin.R'),
+        installs = op.join(config['working_dir'], 'log', 'installs.log')
+    output:
+        sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_alevin_sce.rds')
+    params:
+        working_dir = config['working_dir'],
+        sample = "{wildcards.sample}",
+        Rbin = config['Rbin']
+    log:
+        op.join(config['working_dir'], 'logs', 'r_sce_generation_{sample}_alevin.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'r_sce_generation_{sample}_alevin.txt')
+    shell:
+        """
+        {params.Rbin} -q --no-save --no-restore --slave \
+             -f {input.script} --args \
+             --sample {wildcards.sample} \
+             --working_dir {params.working_dir} \
+             --output_fn {output.sce} &> {log}
+        """
+
 # rule generate_sce_tasseq:
 #     conda:
 #         op.join('envs', 'all_in_one.yaml')
@@ -244,7 +301,7 @@ rule generate_sce:
 #         wta_filtered = op.join(config['working_dir'], 'tasseq', '{sample}', 'Solo.out',
 #                                'Gene', 'filtered', 'matrix.mtx'),
 #         # gtf = config['gtf'],
-#         script = op.join(config['repo_path'], 'src', 'generate_sce_object.R'),
+#         script = op.join(config['repo_path'], 'src', 'generate_sce.R'),
 #         installs = op.join(config['working_dir'], 'log', 'installs.log')
 #     output:
 #         sce = op.join(config['working_dir'], 'starsolo_wta', '{sample}', '{sample}_tasseq_sce.rds')
