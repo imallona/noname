@@ -28,7 +28,7 @@ id <- args$sample
 
 # generating sce object
 
-counts <- Matrix::readMM(file.path(wd, 'bustools', id,'output.mtx'))
+counts <- Matrix::readMM(file.path(wd, 'bustools', id, 'output.mtx'))
 gene_ids <- readLines(file.path(wd, 'bustools', id,'output.genes.txt'))
 barcodes <- readLines(file.path(wd, 'bustools', id,'output.barcodes.txt'))
 

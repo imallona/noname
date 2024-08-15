@@ -98,7 +98,7 @@ rm(sces)
 
 ```{r, cache = FALSE}
 sce <- addPerCellQC(sce,
-                    assay.type = 'wta',
+                    assay.type = 'counts',
                     subsets = list(mito = grep('^mt-', rownames(rowData(sce)),
                                                value = TRUE, ignore.case = TRUE),
                                    capture = rowData(sce)$captured == 'captured'))
@@ -116,7 +116,7 @@ plotColData(sce, x = "sum", y="detected", colour_by = "experiment")
 cat('\n\n')
 
 cat('### ', 'Highest expressed', ' \n\n')
-plotHighestExprs(sce, exprs_values = "wta")
+plotHighestExprs(sce, exprs_values = "counts")
 cat('\n\n')
 ```
 
@@ -238,10 +238,10 @@ for (id in unique(colData(sce)$experiment)) {
 } 
 ```
 
-## Quick clustering (WTA) {.tabset .tabset-pills}
+## Quick clustering (COUNTS) {.tabset .tabset-pills}
 
 ```{r}
-so <- CreateSeuratObject(counts = assay(sce, 'wta'),
+so <- CreateSeuratObject(counts = assay(sce, 'counts'),
                          project = "wta",
                          min.cells = 0, min.features = 0,
                          assay = 'RNA')

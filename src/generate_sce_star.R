@@ -77,13 +77,13 @@ wd <- args$working_dir
 id <- args$sample
 gtf <- args$captured_gtf
 
-wta <- read_matrix(mtx = file.path(wd, 'align_wta', id,  'Solo.out', 'Gene', 'filtered', 'matrix.mtx'),
-                   cells = file.path(wd, 'align_wta', id,  'Solo.out', 'Gene', 'filtered', 'barcodes.tsv'),
-                   features = file.path(wd, 'align_wta', id,  'Solo.out', 'Gene', 'filtered', 'features.tsv'),
+wta <- read_matrix(mtx = file.path(wd, 'starsolo', id,  'Solo.out', 'Gene', 'filtered', 'matrix.mtx'),
+                   cells = file.path(wd, 'starsolo', id,  'Solo.out', 'Gene', 'filtered', 'barcodes.tsv'),
+                   features = file.path(wd, 'starsolo', id,  'Solo.out', 'Gene', 'filtered', 'features.tsv'),
                    cell.column = 1,
                    feature.column = 1)
 
-wta_feat <- read.table(file.path(wd, 'align_wta', id,  'Solo.out', 'Gene', 'filtered', 'features.tsv'),
+wta_feat <- read.table(file.path(wd, 'starsolo', id,  'Solo.out', 'Gene', 'filtered', 'features.tsv'),
                        row.names = 1,
                        header = FALSE)
 
@@ -95,7 +95,7 @@ colnames(wta_feat) <- c("name", "type", "value")
 
 ## wta end
 
-sce <- SingleCellExperiment(assays = list(wta = wta),
+sce <- SingleCellExperiment(assays = list(counts = wta),
                             mainExpName = id,
                             rowData = wta_feat)
 

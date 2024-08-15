@@ -28,7 +28,7 @@ wd <- args$working_dir
 id <- args$sample
 
 # read count matrix
-dir<-file.path(wd, 'align_alevin', id)
+dir<-file.path(wd, 'alevin', id)
 files<-file.path(dir, "alevin", "quants_mat.gz")
 file.exists(files)
 

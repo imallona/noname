@@ -27,8 +27,9 @@ print(get_sample_names())
 
 rule all:
     input:
-        expand(op.join(config['working_dir'], '{aligner}', 'descriptive_report.html'),
-               aligner = get_aligners()),               
+        expand(op.join(config['working_dir'], '{aligner}',  '{sample}', 'descriptive_report.html'),
+               aligner = get_aligners(),
+               sample = get_sample_names())               
         # op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
         # expand(op.join(config['working_dir'], 'alevin', '{sample}', 'alevin', 'quants_mat.gz'),
         #        sample = get_sample_names()),
@@ -125,7 +126,9 @@ rule starsolo:
         sjdbOverhang = config['sjdbOverhang'],
         soloCellFilter = config['soloCellFilter'],
         soloMultiMappers = config['soloMultiMappers'],
-        extraStarSoloArgs = config['extraStarSoloArgs']
+        extraStarSoloArgs = config['extraStarSoloArgs'],
+        gene_solo_path = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
+                            'Gene')
     shell:
         """
    rm -rf {params.tmp}
@@ -155,9 +158,37 @@ rule starsolo:
      --outSAMunmapped Within \
      --soloMultiMappers {params.soloMultiMappers} {params.extraStarSoloArgs}
 
-    rm -rf {params.tmp}
+        rm -rf {params.tmp}
         """
 
+ruleorder: starsolo > symlink_filtered
+
+rule symlink_filtered:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+        raw_count_table = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out', 'Gene',
+                                  'raw', 'matrix.mtx')
+    output:
+        filtered  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
+                            'Gene', 'filtered', 'matrix.mtx')
+    params:
+        gene_solo_path = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
+                            'Gene')
+    threads:
+        1
+    shell:
+        """
+        ## if no cell filtering occurs - happens when heavily downsampling, or when soloCellFilter equals None
+     if [ ! -e {output.filtered} ]; then
+        echo "Caution no cell filtering - symlinking instead"
+        cd {params.gene_solo_path}
+        ln -s {params.gene_solo_path}/raw/*  -t {params.gene_solo_path}/filtered
+     fi
+
+
+        """
         
 # checkpoint retrieve_genome_sizes:
 #     conda:
@@ -196,7 +227,7 @@ rule install_r_deps:
     input:
         script = op.join(config['repo_path'], 'src', 'installs.R')
     output:
-        log = op.join(config['working_dir'], 'log', 'installs.log')
+        log = op.join(config['working_dir'], 'logs', 'installs.log')
     params:
         working_dir = config['working_dir'],
         sample = "{wildcards.sample}",
@@ -214,11 +245,13 @@ rule generate_sce_starsolo:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        raw  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
-                               'Gene', 'raw', 'matrix.mtx'),
+        # raw  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
+        #                        'Gene', 'raw', 'matrix.mtx'),
+        filtered  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
+                               'Gene', 'filtered', 'matrix.mtx'),
         # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_sce_star.R'),
-        installs = op.join(config['working_dir'], 'log', 'installs.log')
+        installs = op.join(config['working_dir'], 'logs', 'installs.log')
     output:
         sce = op.join(config['working_dir'], 'starsolo', '{sample}', '{sample}_starsolo_sce.rds')
     params:
@@ -244,10 +277,10 @@ rule generate_sce_kallisto:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        raw  = op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
+        flag = op.join(config['working_dir'], 'bustools', '{sample}', 'output.mtx'),
         # gtf = config['gtf'],
         script = op.join(config['repo_path'], 'src', 'generate_sce_kallisto.R'),
-        installs = op.join(config['working_dir'], 'log', 'installs.log')
+        installs = op.join(config['working_dir'], 'logs', 'installs.log')
     output:
         sce = op.join(config['working_dir'], 'kallisto', '{sample}', '{sample}_kallisto_sce.rds')
     params:
@@ -271,11 +304,9 @@ rule generate_sce_alevin:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        raw  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
-                               'Gene', 'raw', 'matrix.mtx'),
-        # gtf = config['gtf'],
+        flag = op.join(config['working_dir'], 'alevin', '{sample}', 'alevin', 'quants_mat.gz'),
         script = op.join(config['repo_path'], 'src', 'generate_sce_alevin.R'),
-        installs = op.join(config['working_dir'], 'log', 'installs.log')
+        installs = op.join(config['working_dir'], 'logs', 'installs.log')
     output:
         sce = op.join(config['working_dir'], 'alevin', '{sample}', '{sample}_alevin_sce.rds')
     params:
@@ -303,7 +334,7 @@ rule generate_sce_alevin:
 #                                'Gene', 'filtered', 'matrix.mtx'),
 #         # gtf = config['gtf'],
 #         script = op.join(config['repo_path'], 'src', 'generate_sce.R'),
-#         installs = op.join(config['working_dir'], 'log', 'installs.log')
+#         installs = op.join(config['working_dir'], 'logs', 'installs.log')
 #     output:
 #         sce = op.join(config['working_dir'], 'starsolo', '{sample}', '{sample}_tasseq_sce.rds')
 #     params:
@@ -328,17 +359,19 @@ rule render_descriptive_report:
         script = op.join(config['repo_path'], 'src', 'generate_descriptive_singlecell_report.Rmd'),
         sces = expand(op.join(config['working_dir'], '{{aligner}}', '{sample}', '{sample}_{{aligner}}_sce.rds'),
                       sample = get_sample_names()),
-        installs = op.join(config['working_dir'], 'log', 'installs.log')
+        installs = op.join(config['working_dir'], 'logs', 'installs.log'),
+        counts = expand(op.join(config['working_dir'], 'sampletags', '{sample}', 'sampletag_counts.tsv.gz'),
+                        sample = get_sample_names())
     output:
-        html = op.join(config['working_dir'], '{aligner}', 'descriptive_report.html')
+        html = op.join(config['working_dir'], '{aligner}', '{sample}', 'descriptive_report.html')
         # cache = temp(op.join(config['repo_path'], 'process_sce_objects_cache')),
         # cached_files = temp(op.join(config['repo_path'], 'process_sce_objects_files'))
     log:
-        op.join(config['working_dir'], 'logs', '{aligner}_descriptive_report.log')
+        op.join(config['working_dir'], 'logs', '{aligner}_{sample}_descriptive_report.log')
     benchmark:
-        op.join(config['working_dir'], 'benchmarks', '{aligner}_descriptive_report.txt')
+        op.join(config['working_dir'], 'benchmarks', '{aligner}_{sample}_descriptive_report.txt')
     params:
-        path = op.join(config['working_dir'], '{aligner}'),
+        path = op.join(config['working_dir'], '{aligner}', '{sample}'),
         working_dir = op.join(config['working_dir'], '{aligner}'),
         sample = "{wildcards.sample}",
         Rbin = config['Rbin']
@@ -653,7 +686,7 @@ rule count_sampletags:
         """
         ## this only reports a table with as many rows as `cb,umi,sampletag,cigar` alignments. Not summarized
         ##  at all 
-        samtools view -@ {threads} /home/imallona/noname/bd/sampletags/bd/Aligned.out.bam | \
+        samtools view -@ {threads} {input.bam} | \
           cut -f1,3,6 | sed 's/__/\t/g' | pigz -p {threads} -c > {output.counts}
         """
         
@@ -745,7 +778,7 @@ rule alevin_align:
     threads:
         workflow.cores      
     log:
-        op.join(config['working_dir'], 'log', 'alevin_{sample}_align.log')
+        op.join(config['working_dir'], 'logs', 'alevin_{sample}_align.log')
     benchmark:
         op.join(config['working_dir'], 'benchmarks', 'alevin_{sample}_align.log')
     shell:
