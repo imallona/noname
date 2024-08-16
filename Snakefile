@@ -196,28 +196,27 @@ rule starsolo:
    mkdir -p {params.path} 
 
    {params.STAR} --runThreadN {params.threads} \
-     --genomeDir {params.index_path} \
-     --readFilesCommand zcat \
-     --outFileNamePrefix {params.path} \
-     --readFilesIn  {input.cdna} {input.cbumi}  \
-     --soloType CB_UMI_Complex \
-     --soloAdapterSequence GTGANNNNNNNNNGACA \
-     --soloCBposition 2_-9_2_-1 2_4_2_12 2_17_2_25 \
-     --soloUMIposition 3_10_3_17 \
-     --soloCBwhitelist {input.cb1} {input.cb2} {input.cb3} \
-     --soloCBmatchWLtype 1MM \
-     --soloCellFilter {params.soloCellFilter} \
-     --outSAMattributes NH HI AS nM NM MD jM jI MC ch CB UB gx gn sS CR CY UR UY \
-     --soloCellReadStats Standard \
-     --outSAMtype BAM SortedByCoordinate \
-     --quantMode GeneCounts \
-     --soloUMIlen 8 \
-     --sjdbGTFfile {input.gtf} \
-     --outTmpDir {params.tmp} \
-     --sjdbOverhang {params.sjdbOverhang} \
-     --limitBAMsortRAM {params.maxmem} \
-     --outSAMunmapped Within \
-     --soloMultiMappers {params.soloMultiMappers} {params.extraStarSoloArgs}
+        --genomeDir {params.index_path} \
+        --readFilesCommand zcat \
+        --outFileNamePrefix {params.path} \
+        --readFilesIn  {input.cdna} {input.cbumi}  \
+        --soloType CB_UMI_Complex \
+        --soloAdapterSequence GTGANNNNNNNNNGACA \
+        --soloCBposition 2_-9_2_-1 2_4_2_12 2_17_2_25 \
+        --soloUMIposition 3_10_3_17 \
+        --soloUMIlen 8 \
+        --soloCellReadStats Standard \
+        --soloCBwhitelist {input.cb1} {input.cb2} {input.cb3} \
+        --soloCBmatchWLtype 1MM \
+        --soloCellFilter {params.soloCellFilter} \
+        --outSAMattributes NH HI AS nM NM MD jM jI MC ch CB UB gx gn sS CR CY UR UY\
+        --outSAMtype BAM SortedByCoordinate \
+        --quantMode GeneCounts \
+        --sjdbGTFfile {input.gtf} \
+        --outTmpDir {params.tmp} \
+        --sjdbOverhang {params.sjdbOverhang} \
+        --limitBAMsortRAM {params.maxmem} \
+        --soloMultiMappers {params.soloMultiMappers} {params.extraStarSoloArgs}
 
         rm -rf {params.tmp}
         """
