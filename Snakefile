@@ -17,8 +17,8 @@ configfile: "config.yaml"
 include: "src/workflow_functions.py"
 
 ## kallisto and bustools from bioconda are not reliable, so we compile them
-kallisto = op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src', 'kallisto')
-bustools = op.join(config['working_dir'], 'software', 'bustools', 'build', 'src', 'bustools')
+kallisto = op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src')
+bustools = op.join(config['working_dir'], 'software', 'bustools', 'build', 'src')
 shell.prefix('export PATH=' + kallisto + ':' + bustools + ":$PATH;")
 
 ## to ease whitelists symlinking
@@ -68,8 +68,8 @@ rule compile_kallisto:
         rm -rf kallisto
         # kallisto
         git clone https://github.com/pachterlab/kallisto.git --depth 1
-        git log | head &> {log}
         cd kallisto 
+        git log | head &> {log}
         mkdir build
         cd build
         cmake .. -DCMAKE_INSTALL_PREFIX:PATH=$HOME &>> {log}
@@ -96,8 +96,8 @@ rule compile_bustools:
         # bustools
        
         git clone https://github.com/BUStools/bustools.git --depth 1
-        git log | head &> {log}
         cd bustools
+        git log | head &> {log}
         mkdir build
         cd build
         cmake .. -DCMAKE_INSTALL_PREFIX:PATH=$HOME &>> {log}
@@ -573,9 +573,11 @@ rule kallisto_bus:
     output:
         matrix_ec = op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
         transcripts = op.join(config['working_dir'], 'kallisto', '{sample}', 'transcripts.txt'),
-        bus = op.join(config['working_dir'], 'kallisto', '{sample}', 'output.bus')
+        bus = op.join(config['working_dir'], 'kallisto', '{sample}', 'output.bus'),
+        tmp = temp(op.join(config['working_dir'], 'kallisto', '{sample}', 'transcripts.txt.wrong'))
     params:
-        output_dir = op.join(config['working_dir'], 'kallisto', '{sample}')
+        output_dir = op.join(config['working_dir'], 'kallisto', '{sample}'),
+        gtf_style = config['gtf_origin']
     threads: workflow.cores
     benchmark:
         op.join(config['working_dir'], 'benchmarks', '{sample}_kallisto_bus.txt')
@@ -588,8 +590,23 @@ rule kallisto_bus:
             -x '0,0,27:0,27,35:1,0,0' \
             -t {threads} \
             {input.standardized_cb_umi} {input.cdna} &> {log}
+
+         if [[ {params.gtf_style} == 'ensembl' ]]
+         then
+            echo "Ensembl GTF, nothing to do"
+            touch {output.tmp}   
+         elif [[ {params.gtf_style} == 'gencode' ]]
+         then
+            echo "Gencode GTF, standardizing transcripts"
+            sed  's/|/ /g' {output.transcripts} | cut -f1 -d" " > {output.tmp}
+            cp {output.tmp} {output.transcripts}
+         
+         else
+           echo "gtf_origin is misspecified within the config file"
+         fi  
         """
 
+        
 rule bustools_count:
     # conda:
     #     op.join('envs', 'kallisto.yaml')

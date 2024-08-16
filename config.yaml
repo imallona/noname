@@ -59,9 +59,9 @@ samples:
   # cat 12SMK_S1_L432_R2_001.fastq.gz 12WTA_S1_L432_R2_001.fastq.gz > r2.fq.gz &
   # concatenate physically instead, with cat
   
-  - name: example_fifo
-    uses:
-      cb_umi_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/r1.fq.gz"
-      cdna_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/r2.fq.gz"
-      whitelist: 384x3
-      species: 'human'
+  # - name: example_fifo
+  #   uses:
+  #     cb_umi_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/r1.fq.gz"
+  #     cdna_fq: "/home/imallona/tmp/bdrhapsody_demo/12WTA-ABC-SMK-EB-5kJRT/r2.fq.gz"
+  #     whitelist: 384x3
+  #     species: 'human'
