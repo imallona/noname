@@ -16,6 +16,11 @@ configfile: "config.yaml"
 
 include: "src/workflow_functions.py"
 
+## kallisto and bustools from bioconda are not reliable, so we compile them
+kallisto = op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src', 'kallisto')
+bustools = op.join(config['working_dir'], 'software', 'bustools', 'build', 'src', 'bustools')
+shell.prefix('export PATH=' + kallisto + ':' + bustools + ":$PATH;")
+
 ## to ease whitelists symlinking
 if not op.isabs(config['repo_path']):
     config['repo_path'] = op.join(workflow.basedir, config['repo_path'])
@@ -44,6 +49,62 @@ rule all:
         # expand(op.join(config['working_dir'], 'starsolo', '{sample}', '{sample}_starsolo_sce.rds'),
         #        sample = get_sample_names())
 
+rule compile_kallisto:
+    output:
+        op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src', 'kallisto')
+    log:
+        op.join(config['working_dir'], 'logs', 'kallisto_install.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'kallisto_install.txt')
+    params:
+        soft = op.join(config['working_dir'], 'software')
+    threads:
+        1 # min(5, workflow.cores)
+    shell:
+        """
+        mkdir -p {params.soft}
+        cd {params.soft}
+        
+        rm -rf kallisto
+        # kallisto
+        git clone https://github.com/pachterlab/kallisto.git --depth 1
+        git log | head &> {log}
+        cd kallisto 
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_INSTALL_PREFIX:PATH=$HOME &>> {log}
+        make -j {threads} &>> {log}
+        """
+
+rule compile_bustools:
+    output:
+        op.join(config['working_dir'], 'software', 'bustools', 'build', 'src', 'bustools')
+    log:
+        op.join(config['working_dir'], 'logs', 'bustools_install.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'bustools_install.txt')
+    params:
+        soft = op.join(config['working_dir'], 'software')
+    threads:
+        min(5, workflow.cores)
+    shell:
+        """
+        mkdir -p {params.soft}
+        cd {params.soft}
+        rm -rf bustools
+        
+        # bustools
+       
+        git clone https://github.com/BUStools/bustools.git --depth 1
+        git log | head &> {log}
+        cd bustools
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_INSTALL_PREFIX:PATH=$HOME &>> {log}
+        make -j {threads} &>> {log}
+        """
+
+        
 rule star_index:
     conda:
         op.join('envs', 'all_in_one.yaml')
@@ -131,7 +192,7 @@ rule starsolo:
                             'Gene')
     shell:
         """
-   rm -rf {params.tmp}
+   rm -rf {params.tmp} {params.path}/Solo.out
    mkdir -p {params.path} 
 
    {params.STAR} --runThreadN {params.threads} \
@@ -186,8 +247,6 @@ rule symlink_filtered:
         cd {params.gene_solo_path}
         ln -s {params.gene_solo_path}/raw/*  -t {params.gene_solo_path}/filtered
      fi
-
-
         """
         
 # checkpoint retrieve_genome_sizes:
@@ -400,6 +459,7 @@ rule install_rustody:
         curl https://sh.rustup.rs -sSf | sh
         source "$HOME/.cargo/env"
         git clone https://github.com/stela2502/Rustody --depth 1
+        git log | head
         cd Rustody
         cargo build --release 2> {log}
         """
@@ -477,7 +537,9 @@ rule kallisto_index:
     # conda:
     #     op.join('envs', 'kallisto.yaml')
     input:
-        transcriptome = config['transcriptome']
+        transcriptome = config['transcriptome'],
+        kal = op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src', 'kallisto'),
+        bus = op.join(config['working_dir'], 'software', 'bustools', 'build', 'src', 'bustools')  
     params:
         index_name = 'kallisto.index',
         output_dir= op.join(config['working_dir'], 'data', 'index', 'kallisto')        
@@ -506,6 +568,8 @@ rule kallisto_bus:
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
         kallisto_index = op.join(config['working_dir'], 'data', 'index', 'kallisto', 'kallisto.index'),
+        kal = op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src', 'kallisto'),
+        bus = op.join(config['working_dir'], 'software', 'bustools', 'build', 'src', 'bustools')
     output:
         matrix_ec = op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
         transcripts = op.join(config['working_dir'], 'kallisto', '{sample}', 'transcripts.txt'),
@@ -527,13 +591,15 @@ rule kallisto_bus:
         """
 
 rule bustools_count:
-    conda:
-        op.join('envs', 'kallisto.yaml')
+    # conda:
+    #     op.join('envs', 'kallisto.yaml')
     input:
         txp2gene = op.join(config['working_dir'], 'data', 'index', 'salmon', 'txp2gene'),
         matrix_ec = op.join(config['working_dir'], 'kallisto', '{sample}', 'matrix.ec'),
         transcripts = op.join(config['working_dir'], 'kallisto', '{sample}', 'transcripts.txt'),
-        bus = op.join(config['working_dir'], 'kallisto', '{sample}', 'output.bus')
+        bus = op.join(config['working_dir'], 'kallisto', '{sample}', 'output.bus'),
+        kal = op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src', 'kallisto'),
+        btools = op.join(config['working_dir'], 'software', 'bustools', 'build', 'src', 'bustools')  
     output:
         op.join(config['working_dir'], 'bustools', '{sample}', 'output.mtx')
     params:
