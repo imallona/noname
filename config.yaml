@@ -12,7 +12,7 @@ max_mem_mb: 20000 ## these are megabytes
 
 ## cell filtering
 # soloCellFilter: "EmptyDrops_CR" # None, TopCells, CellRanger2.2
-soloCellFilter: "EmptyDrops_CR" # "CellRanger2.2" # None, TopCells, CellRanger2.2
+soloCellFilter: "TopCells 100" # "CellRanger2.2" # None, TopCells, CellRanger2.2
 
 ## multimappers
 soloMultiMappers: "Unique" # Uniform, Rescue , PropUnique, EM
@@ -25,18 +25,20 @@ working_dir: /home/imallona/noname/test_run/
 
 
 gtf_origin: "gencode"
-# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.primary_assembly.annotation.gtf.gz
+# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.basic.annotation.gtf.gz
 # caution uncompressed
-gtf: /home/imallona/src/noname/data/gencode.vM35.primary_assembly.annotation.gtf
-# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/GRCm39.primary_assembly.genome.fa.gz
-# caution uncompressed
-genome: /home/imallona/src/noname/data/GRCm39.primary_assembly.genome.fa
-# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M35/gencode.vM35.pc_transcripts.fa.gz
-# caution compressed
-transcriptome: /home/imallona/src/noname/data/gencode.vM35.pc_transcripts.fa.gz
+gtf: /home/imallona/src/noname/data/gencode.v46.basic.annotation.gtf.gz
 
-# readlength is 71, but something is odd with cDNA reads - reducing
-sjdbOverhang: 50
+# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/GRCh38.p14.genome.fa.gz
+# caution uncompressed
+genome: /home/imallona/src/noname/data/GRCh38.p14.genome.fa
+
+# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.pc_transcripts.fa.gz
+# caution compressed
+transcriptome: /home/imallona/src/noname/data/gencode.v46.pc_transcripts.fa.gz
+
+# cDNA readlength is 71
+sjdbOverhang: 70
 
 # aligner: ['starsolo']
 aligner: ['starsolo', 'kallisto', 'alevin']
