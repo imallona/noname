@@ -565,6 +565,7 @@ rule kallisto_bus:
     #     op.join('envs', 'kallisto.yaml')
     input:
         transcriptome = config['transcriptome'],
+        # transcriptome = op.join(config['working_dir'], 'data', 'index', 'salmon', 'transcriptome.fa'),        
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
         kallisto_index = op.join(config['working_dir'], 'data', 'index', 'kallisto', 'kallisto.index'),
@@ -772,15 +773,14 @@ rule count_sampletags:
         samtools view -@ {threads} {input.bam} | \
           cut -f1,3,6 | sed 's/__/\t/g' | pigz -p {threads} -c > {output.counts}
         """
-        
-rule salmon_index:
+
+rule deversion_transcriptome:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
         transcriptome = config['transcriptome']
     output:
-        deversioned_fasta = temp(op.join(config['working_dir'], 'data', 'index', 'salmon', 'transcriptome.fa')),
-        index_flag = op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin')
+        deversioned_fasta = op.join(config['working_dir'], 'data', 'index', 'salmon', 'transcriptome.fa')
     params:
         index_path = op.join(config['working_dir'], 'data', 'index', 'salmon'),
         gtf_style = config['gtf_origin']
@@ -804,20 +804,36 @@ rule salmon_index:
          elif [[ {params.gtf_style} == 'gencode' ]]
          then
             echo "Gencode GTF"
-            ## yes versions, no pipes
+            ## yes versions, nbo pipes
             zcat {input.transcriptome} | sed 's/|/ /g' > {output.deversioned_fasta}
 
          else
            echo "gtf_origin is misspecified within the config file"
-         fi 
-
-        salmon index -t {output.deversioned_fasta} -i {params.index_path} -p {threads} &> {log}
-
-
- 
-        
+         fi      
         """
+    
+rule salmon_index:
+    conda:
+        op.join('envs', 'all_in_one.yaml')
+    input:
+        transcriptome = op.join(config['working_dir'], 'data', 'index', 'salmon', 'transcriptome.fa')
+    output:
+        index_flag = op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin')
+    params:
+        index_path = op.join(config['working_dir'], 'data', 'index', 'salmon'),
+        gtf_style = config['gtf_origin']
+    threads: workflow.cores    
+    log:
+        op.join(config['working_dir'], 'logs', 'alevin_index.log')
+    benchmark:
+        op.join(config['working_dir'], 'benchmarks', 'alevin_index.txt')
+    shell:
+        """
+        mkdir -p {params.index_path}
 
+        salmon index -t {input.transcriptome} -i {params.index_path} -p {threads} &> {log}        
+        """
+         
 rule get_txp2gene:
     conda:
         op.join('envs', 'all_in_one.yaml')
