@@ -170,7 +170,7 @@ rule starsolo:
     output:
         bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam'),
         raw_count_table = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out', 'Gene',
-                                  'raw', 'matrix.mtx')
+                                  'filtered', 'matrix.mtx')
     threads:
         min(10, config['nthreads'])
     log:
@@ -221,32 +221,32 @@ rule starsolo:
         rm -rf {params.tmp}
         """
 
-ruleorder: starsolo > symlink_filtered
+# ruleorder: starsolo > symlink_filtered
 
-rule symlink_filtered:
-    conda:
-        op.join('envs', 'all_in_one.yaml')
-    input:
-        bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam'),
-        raw_count_table = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out', 'Gene',
-                                  'raw', 'matrix.mtx')
-    output:
-        filtered  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
-                            'Gene', 'filtered', 'matrix.mtx')
-    params:
-        gene_solo_path = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
-                            'Gene')
-    threads:
-        1
-    shell:
-        """
-        ## if no cell filtering occurs - happens when heavily downsampling, or when soloCellFilter equals None
-     if [ ! -e {output.filtered} ]; then
-        echo "Caution no cell filtering - symlinking instead"
-        cd {params.gene_solo_path}
-        ln -s {params.gene_solo_path}/raw/*  -t {params.gene_solo_path}/filtered
-     fi
-        """
+# rule symlink_filtered:
+#     conda:
+#         op.join('envs', 'all_in_one.yaml')
+#     input:
+#         bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam'),
+#         raw_count_table = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out', 'Gene',
+#                                   'raw', 'matrix.mtx')
+#     output:
+#         filtered  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
+#                             'Gene', 'filtered', 'matrix.mtx')
+#     params:
+#         gene_solo_path = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
+#                             'Gene')
+#     threads:
+#         1
+#     shell:
+#         """
+#         ## if no cell filtering occurs - happens when heavily downsampling, or when soloCellFilter equals None
+#      if [ ! -e {output.filtered} ]; then
+#         echo "Caution no cell filtering - symlinking instead"
+#         cd {params.gene_solo_path}
+#         ln -s {params.gene_solo_path}/raw/*  -t {params.gene_solo_path}/filtered
+#      fi
+#         """
         
 # checkpoint retrieve_genome_sizes:
 #     conda:
