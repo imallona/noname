@@ -140,19 +140,19 @@ rule star_index:
         """
 
 
-rule prepare_whitelists:
-    # conda:
-    #     op.join('envs', 'all_in_one.yaml')
-    input:
-        cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
-        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample)
-    output:
-        cb1 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS1.txt'),
-        cb2 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-        cb3 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS3.txt')
-    run:
-        sample = wildcards.sample
-        symlink_whitelist(sample)
+# rule prepare_whitelists:
+#     # conda:
+#     #     op.join('envs', 'all_in_one.yaml')
+#     input:
+#         cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
+#         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample)
+#     output:
+#         cb1 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS1.txt'),
+#         cb2 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+#         cb3 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS3.txt')
+#     run:
+#         sample = wildcards.sample
+#         symlink_whitelist(sample)
 
 
 rule starsolo:
@@ -160,12 +160,13 @@ rule starsolo:
         op.join('envs', 'all_in_one.yaml')
     input:
         cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
-        cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
+        # cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
+        standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
         index_flag = op.join(config['working_dir'] , 'data', 'index', 'star', 'SAindex'),
         gtf = config['gtf'],
-        cb1 = op.join(config['working_dir'], 'starsolo', "{sample}",  'whitelists', 'BD_CLS1.txt'),
-        cb2 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS2.txt'),
-        cb3 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS3.txt')
+        # cb1 = op.join(config['working_dir'], 'starsolo', "{sample}",  'whitelists', 'BD_CLS1.txt'),
+        # cb2 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS2.txt'),
+        # cb3 = op.join(config['working_dir'], 'starsolo', "{sample}", 'whitelists', 'BD_CLS3.txt')
     output:
         bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam'),
         raw_count_table = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out', 'Gene',
@@ -199,15 +200,12 @@ rule starsolo:
         --genomeDir {params.index_path} \
         --readFilesCommand zcat \
         --outFileNamePrefix {params.path} \
-        --readFilesIn  {input.cdna} {input.cbumi}  \
-        --soloType CB_UMI_Complex \
-        --soloAdapterSequence GTGANNNNNNNNNGACA \
-        --soloCBposition 2_-9_2_-1 2_4_2_12 2_17_2_25 \
-        --soloUMIposition 3_10_3_17 \
-        --soloUMIlen 8 \
+        --readFilesIn  {input.cdna} {input.standardized_cb_umi}  \
+        --soloType CB_UMI_Simple \
+        --soloCBstart 1 --soloCBlen 27  \
+        --soloUMIstart 28 --soloUMIlen 8 \
         --soloCellReadStats Standard \
-        --soloCBwhitelist {input.cb1} {input.cb2} {input.cb3} \
-        --soloCBmatchWLtype 1MM \
+        --soloCBwhitelist None \
         --soloCellFilter {params.soloCellFilter} \
         --outSAMattributes NH HI AS nM NM MD jM jI MC ch CB UB gx gn sS CR CY UR UY\
         --outSAMtype BAM SortedByCoordinate \

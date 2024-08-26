@@ -5,7 +5,7 @@ STAR: STAR
 repo_path: '.'
 
 ## run limits
-nthreads: 50
+nthreads: 30
 max_mem_mb: 20000 ## these are megabytes
 
 # downsampled: 50000000 # or 0
@@ -18,11 +18,11 @@ soloCellFilter: "TopCells 100" # "CellRanger2.2" # None, TopCells, CellRanger2.2
 soloMultiMappers: "Unique" # Uniform, Rescue , PropUnique, EM
 
 ## extra STARsolo arguments
-extraStarSoloArgs: "--soloStrand Forward"
+# extraStarSoloArgs: "--soloStrand Forward"
+extraStarSoloArgs: ""
 
 ## full, absolute path where outputs will be generated at
 working_dir: /home/imallona/noname/test_run/
-
 
 gtf_origin: "gencode"
 # https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.primary_assembly.annotation.gtf.gz
