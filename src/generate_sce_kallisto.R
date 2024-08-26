@@ -32,10 +32,12 @@ counts <- Matrix::readMM(file.path(wd, 'bustools', id, 'output.mtx'))
 gene_ids <- readLines(file.path(wd, 'bustools', id,'output.genes.txt'))
 barcodes <- readLines(file.path(wd, 'bustools', id,'output.barcodes.txt'))
 
+rownames(counts) <- barcodes
+colnames(counts) <- gene_ids
+
 sce <- SingleCellExperiment(list(counts=t(counts)),
                             colData=DataFrame(Barcode=barcodes),
                             rowData=DataFrame(ID=gene_ids,SYMBOL=gene_ids))
 rownames(sce) <- gene_ids
-
 
 saveRDS(object = sce, file = args$output_fn)

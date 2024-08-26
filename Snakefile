@@ -216,7 +216,7 @@ rule starsolo:
         --outTmpDir {params.tmp} \
         --sjdbOverhang {params.sjdbOverhang} \
         --limitBAMsortRAM {params.maxmem} \
-        --soloMultiMappers {params.soloMultiMappers} {params.extraStarSoloArgs}
+        --soloMultiMappers {params.soloMultiMappers} {params.extraStarSoloArgs} 2> {log}
 
         rm -rf {params.tmp}
         """
