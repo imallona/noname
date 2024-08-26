@@ -153,14 +153,14 @@ rule star_index:
 #     run:
 #         sample = wildcards.sample
 #         symlink_whitelist(sample)
-
-
+       
 rule starsolo:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        # cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
         # cbumi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
+        standardized_cdna = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cdna.fq.gz"),
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
         index_flag = op.join(config['working_dir'] , 'data', 'index', 'star', 'SAindex'),
         gtf = config['gtf'],
@@ -172,7 +172,7 @@ rule starsolo:
         raw_count_table = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out', 'Gene',
                                   'raw', 'matrix.mtx')
     threads:
-        workflow.cores
+        min(10, config['nthreads'])
     log:
         op.join(config['working_dir'], 'logs', 'starsolo_{sample}.log')
     benchmark:
@@ -200,10 +200,12 @@ rule starsolo:
         --genomeDir {params.index_path} \
         --readFilesCommand zcat \
         --outFileNamePrefix {params.path} \
-        --readFilesIn  {input.cdna} {input.standardized_cb_umi}  \
+        --readFilesIn  {input.standardized_cdna} {input.standardized_cb_umi}  \
         --soloType CB_UMI_Simple \
         --soloCBstart 1 --soloCBlen 27  \
         --soloUMIstart 28 --soloUMIlen 8 \
+        --soloUMIdedup 1MM_CR \
+        --soloBarcodeReadLength 1 \
         --soloCellReadStats Standard \
         --soloCBwhitelist None \
         --soloCellFilter {params.soloCellFilter} \
@@ -301,11 +303,9 @@ rule generate_sce_starsolo:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        # raw  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
-        #                        'Gene', 'raw', 'matrix.mtx'),
         filtered  = op.join(config['working_dir'], 'starsolo', '{sample}', 'Solo.out',
                                'Gene', 'filtered', 'matrix.mtx'),
-        # gtf = config['gtf'],
+        bam = op.join(config['working_dir'], 'starsolo', '{sample}', 'Aligned.sortedByCoord.out.bam'),
         script = op.join(config['repo_path'], 'src', 'generate_sce_star.R'),
         installs = op.join(config['working_dir'], 'logs', 'installs.log')
     output:
@@ -321,6 +321,9 @@ rule generate_sce_starsolo:
         op.join(config['working_dir'], 'benchmarks', 'r_sce_generation_{sample}_star.txt')
     shell:
         """
+        ## this is unrelated to the bamgeneration; fixes starsolo's default permissions
+        chmod -R ug+rwX $(dirname {input.bam})
+
         {params.Rbin} -q --no-save --no-restore --slave \
              -f {input.script} --args \
              --sample {wildcards.sample} \
@@ -510,8 +513,13 @@ rule standardize_cb_umis_cutadapt:
     conda:
         op.join('envs', 'all_in_one.yaml')
     input:
-        cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample)
+        cb_umi = lambda wildcards: get_cbumi_by_name(wildcards.sample),
+        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample)
     output:
+        cdna = op.join(config['working_dir'], 'data', 'fastq',
+                       "{sample}_standardized_cdna.fq.gz"),
+        temp_cb_umi = temp(op.join(config['working_dir'], 'data', 'fastq',
+                                      "{sample}_temp_cb_umi.fq.gz")),        
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq',
                                       "{sample}_standardized_cb_umi.fq.gz")
     params:
@@ -526,7 +534,13 @@ rule standardize_cb_umis_cutadapt:
            --discard-untrimmed \
            --cores {threads} \
            -e 0 \
-           {input.cb_umi} | cut -c1-9,14-22,27- | pigz -p {threads} > {output.standardized_cb_umi}
+           --pair-filter=both \
+           -o {output.temp_cb_umi} \
+           -p {output.cdna} \
+           {input.cb_umi} {input.cdna} 
+
+        pigz --decompress {output.temp_cb_umi} -p {threads} --stdout | \
+            cut -c1-9,14-22,27- | pigz -p {threads} > {output.standardized_cb_umi}
         """
 
 ## conda recipe is broken        
@@ -563,7 +577,8 @@ rule kallisto_bus:
     input:
         transcriptome = config['transcriptome'],
         # transcriptome = op.join(config['working_dir'], 'data', 'index', 'salmon', 'transcriptome.fa'),        
-        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        # cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        standardized_cdna = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cdna.fq.gz"),
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cb_umi.fq.gz"),
         kallisto_index = op.join(config['working_dir'], 'data', 'index', 'kallisto', 'kallisto.index'),
         kal = op.join(config['working_dir'], 'software', 'kallisto', 'build', 'src', 'kallisto'),
@@ -587,7 +602,7 @@ rule kallisto_bus:
             --output-dir {params.output_dir} \
             -x '0,0,27:0,27,35:1,0,0' \
             -t {threads} \
-            {input.standardized_cb_umi} {input.cdna} &> {log}
+            {input.standardized_cb_umi} {input.standardized_cdna} &> {log}
 
          if [[ {params.gtf_style} == 'ensembl' ]]
          then
@@ -864,7 +879,8 @@ rule alevin_align:
         index_flag = op.join(config['working_dir'], 'data', 'index', 'salmon', 'seq.bin'),
         standardized_cb_umi = op.join(config['working_dir'], 'data', 'fastq',
                                       "{sample}_standardized_cb_umi.fq.gz"),
-        cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        # cdna = lambda wildcards: get_cdna_by_name(wildcards.sample),
+        standardized_cdna = op.join(config['working_dir'], 'data', 'fastq', "{sample}_standardized_cdna.fq.gz"),
         t2g = op.join(config['working_dir'], 'data', 'index', 'salmon', 'txp2gene')
     params:
         index_path =  op.join(config['working_dir'], 'data', 'index', 'salmon'),
@@ -882,14 +898,13 @@ rule alevin_align:
         salmon alevin -i {params.index_path} \
            -l ISR \
            -1 {input.standardized_cb_umi} \
-           -2 {input.cdna} \
+           -2 {input.standardized_cdna} \
            --bc-geometry '1[1-27]' \
            --read-geometry '2[1-end]' \
            --umi-geometry '1[28-35]' \
            -o {params.output_dir} \
            -p {threads} \
            --tgMap {input.t2g} &> {log}
-
         """
 
         
